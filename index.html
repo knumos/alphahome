@@ -1673,9 +1673,14 @@
                   ${ex.sets} × ${ex.minReps === ex.maxReps ? ex.minReps : ex.minReps + '-' + ex.maxReps} reps ${ex.note ? '(' + ex.note + ')' : ''} • Descanso ${formatTime(ex.restSec)}
                 </p>
               </div>
-              <button onclick="openSwapExerciseModal(${idx}, 'routine', '${day.id}')" class="shrink-0 px-2.5 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-[11px] font-bold text-cyan-300">
-                ↻ Cambiar
-              </button>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button onclick="openTechniqueModal('${escapeJs(ex.name)}')" class="px-2.5 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-[11px] font-bold text-cyan-300">
+                  ▶
+                </button>
+                <button onclick="openSwapExerciseModal(${idx}, 'routine', '${day.id}')" class="px-2.5 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-[11px] font-bold text-slate-300">
+                  ↻ Cambiar
+                </button>
+              </div>
             </div>
           `).join('')}
         </div>
@@ -1843,12 +1848,21 @@
                     </div>
                     <p class="text-[11px] text-slate-400 mt-0.5 leading-snug">${escapeHtml(w.tip)}</p>
                   </div>
-                  <button
-                    onclick="startRestTimer(${w.timerSec || 45}, 'Calentamiento: ${escapeJs(w.name)}')"
-                    class="shrink-0 px-2 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-[10px] font-bold text-cyan-300"
-                  >
-                    ⏱ ${w.timerSec || 45}s
-                  </button>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button
+                      onclick="openTechniqueModal('${escapeJs(w.name)}')"
+                      title="Ver técnica"
+                      class="px-2 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-[10px] font-bold text-cyan-300"
+                    >
+                      ▶
+                    </button>
+                    <button
+                      onclick="startRestTimer(${w.timerSec || 45}, 'Calentamiento: ${escapeJs(w.name)}')"
+                      class="px-2 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-[10px] font-bold text-cyan-300"
+                    >
+                      ⏱ ${w.timerSec || 45}s
+                    </button>
+                  </div>
                 </div>
               `).join('')}
 
@@ -1922,9 +1936,14 @@
                       <h3 class="text-base font-extrabold text-white leading-snug">${escapeHtml(ex.name)}</h3>
                     </div>
 
-                    <button onclick="openSwapExerciseModal(${exIdx}, 'active')" class="shrink-0 px-2.5 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-[11px] font-bold text-slate-300 transition">
-                      ↻ Cambiar
-                    </button>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                      <button onclick="openTechniqueModal('${escapeJs(ex.name)}')" class="px-2.5 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-[11px] font-bold text-cyan-300 transition">
+                        ▶ Técnica
+                      </button>
+                      <button onclick="openSwapExerciseModal(${exIdx}, 'active')" class="px-2.5 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-[11px] font-bold text-slate-300 transition">
+                        ↻ Cambiar
+                      </button>
+                    </div>
                   </div>
 
                   ${bodyweightBadgeHtml}
@@ -2840,7 +2859,1224 @@
       backdrop.classList.remove('hidden');
     }
 
+
+    // -------------------------------------------------------------------------
+    // 13B. GUÍA TÉCNICA INTERACTIVA CON 3 PROYECCIONES SVG (100% OFFLINE)
+    // -------------------------------------------------------------------------
+    let techAnim = {
+      rafId: null,
+      playing: true,
+      speed: 1,
+      showGuides: true,
+      viewIndex: 0, // 0, 1, 2
+      startTime: 0,
+      pausedPhase: 0,
+      exerciseName: '',
+      archetype: 'incline_press'
+    };
+
+    const EXERCISE_GUIDES = {
+      'Press Inclinado con Mancuernas': {
+        archetype: 'incline_press',
+        views: ['Lateral (30°)', 'Frontal', 'Superior'],
+        muscles: 'Pectoral superior • Deltoide anterior • Tríceps',
+        cues: [
+          ['Postura', 'Banco a 30°, omóplatos retraídos y pies firmes en el suelo sin despegar glúteos.'],
+          ['Recorrido', 'Baja en 2 segundos con codos a ~45° del torso hasta rozar la línea clavicular; sube convergiendo suavemente.'],
+          ['Error común', 'Abrir los codos a 90° en forma de T o arquear en exceso la zona lumbar.']
+        ]
+      },
+      'Dominadas Pronas/Neutras en Barra': {
+        archetype: 'pullup',
+        views: ['Lateral', 'Frontal', 'Posterior'],
+        muscles: 'Dorsal ancho • Espalda media • Bíceps',
+        cues: [
+          ['Postura', 'Agarre ligeramente más ancho que hombros, abdomen activo y piernas juntas sin balanceo.'],
+          ['Recorrido', 'Inicia deprimiendo escápulas y lleva el pecho hacia la barra; controla la bajada hasta extender codos.'],
+          ['Error común', 'Dar tirones con las piernas o encoger los hombros hacia las orejas arriba.']
+        ]
+      },
+      'Remo Pecho Apoyado en Banco': {
+        archetype: 'chest_row',
+        views: ['Lateral (35°)', 'Frontal', 'Superior'],
+        muscles: 'Dorsal • Romboides • Trapecio medio',
+        cues: [
+          ['Postura', 'Banco a 30–40°, pecho pegado al respaldo todo el tiempo y cuello neutro.'],
+          ['Recorrido', 'Jala las mancuernas hacia la cadera en arco ligero, apretando escápulas 1 segundo arriba.'],
+          ['Error común', 'Despegar el pecho del banco o jalar verticalmente encogiendo trapecios.']
+        ]
+      },
+      'Aperturas Inclinadas con Mancuernas': {
+        archetype: 'incline_fly',
+        views: ['Lateral (30°)', 'Frontal', 'Superior'],
+        muscles: 'Pectoral superior • Pectoral esternal',
+        cues: [
+          ['Postura', 'Banco a 30° con ligera flexión fija en los codos (~15–20°) durante toda la serie.'],
+          ['Recorrido', 'Abre en arco amplio hasta sentir estiramiento cómodo en el pecho y cierra como en un abrazo.'],
+          ['Error común', 'Bajar demasiado forzando la cápsula anterior del hombro o convertirlo en un press.']
+        ]
+      },
+      'Face Pull con Banda en Barra': {
+        archetype: 'face_pull',
+        views: ['Lateral', 'Frontal', 'Superior'],
+        muscles: 'Deltoide posterior • Manguito rotador • Trapecio medio',
+        cues: [
+          ['Postura', 'Ancla la banda a la altura de la cara o ligeramente arriba, da un paso atrás con base estable.'],
+          ['Recorrido', 'Jala hacia la frente separando las manos y rotando externamente (pose de doble bíceps) al final.'],
+          ['Error común', 'Tirar hacia el pecho con codos caídos o inclinarse hacia atrás con el peso corporal.']
+        ]
+      },
+      'Elevaciones Laterales con Mancuerna': {
+        archetype: 'lateral_raise',
+        views: ['Frontal', 'Lateral', 'Superior (30°)'],
+        muscles: 'Deltoide lateral • Supraespinoso',
+        cues: [
+          ['Postura', 'Torso firme o ligeramente inclinado al frente, codos casi extendidos y hombros abajo.'],
+          ['Recorrido', 'Eleva en el plano escapular (~30° hacia adelante) liderando con los codos hasta la altura del hombro.'],
+          ['Error común', 'Subir con impulso lumbar o elevar los trapecios hacia las orejas.']
+        ]
+      },
+      'Sentadilla Búlgara en Banco': {
+        archetype: 'bulgarian',
+        views: ['Lateral', 'Frontal', 'Posterior'],
+        muscles: 'Cuádriceps • Glúteo mayor • Estabilizadores de cadera',
+        cues: [
+          ['Postura', 'Empeine trasero apoyado plano sobre el banco, pies separados al ancho de cadera (no en línea recta) y leve inclinación frontal.'],
+          ['Recorrido', 'Baja la cadera y la rodilla trasera hacia el suelo manteniendo la rodilla delantera alineada con la punta del pie.'],
+          ['Error común', 'Dejar colapsar la rodilla delantera hacia adentro o empujar con la pierna trasera en vez de la delantera.']
+        ]
+      },
+      'Curl Inclinado en Banco 45°': {
+        archetype: 'incline_curl',
+        views: ['Lateral (45°)', 'Frontal', 'Superior'],
+        muscles: 'Bíceps braquial (cabeza larga) • Braquial',
+        cues: [
+          ['Postura', 'Espalda y cabeza apoyadas en banco a 45°, brazos colgando perpendiculares al suelo detrás del torso.'],
+          ['Recorrido', 'Flexiona los codos sin adelantarlos, supina la muñeca al subir y controla 2s la bajada completa.'],
+          ['Error común', 'Adelantar los codos al subir o despegar la espalda para ayudarte con inercia.']
+        ]
+      },
+      'Extensión de Tríceps con Banda en Barra': {
+        archetype: 'band_tricep',
+        views: ['Lateral', 'Frontal', 'Posterior'],
+        muscles: 'Tríceps (cabeza lateral y medial)',
+        cues: [
+          ['Postura', 'Cuelga la banda de la barra, pega los codos a los costados e inclina ligeramente el torso.'],
+          ['Recorrido', 'Extiende por completo los codos apretando el tríceps 1s abajo y sube controlado hasta 90°+.'],
+          ['Error común', 'Balancear los hombros o abrir los codos hacia afuera al empujar.']
+        ]
+      },
+      'Sentadilla Goblet Talones Elevados': {
+        archetype: 'goblet_squat',
+        views: ['Lateral', 'Frontal', 'Posterior'],
+        muscles: 'Cuádriceps • Glúteos • Core',
+        cues: [
+          ['Postura', 'Talones apoyados sobre una cuña o libro firme (2–3 cm), mancuerna pegada al pecho y codos hacia abajo.'],
+          ['Recorrido', 'Desciende profundo manteniendo el torso erguido y las rodillas viajando en la dirección de las puntas.'],
+          ['Error común', 'Dejar caer el pecho hacia adelante o meter las rodillas hacia adentro al subir.']
+        ]
+      },
+      'Press Plano con Mancuernas': {
+        archetype: 'flat_press',
+        views: ['Lateral', 'Frontal', 'Superior'],
+        muscles: 'Pectoral mayor • Deltoide anterior • Tríceps',
+        cues: [
+          ['Postura', 'Acostado en banco horizontal, escápulas juntas hacia atrás y abajo, pies firmes.'],
+          ['Recorrido', 'Baja con codos a ~45° hasta que las mancuernas queden al nivel del pecho y empuja en arco sutil.'],
+          ['Error común', 'Rebotar abajo o abrir los codos a 90° cargando el hombro anterior.']
+        ]
+      },
+      'Dominadas Supinas en Barra': {
+        archetype: 'chinup',
+        views: ['Lateral', 'Frontal', 'Posterior'],
+        muscles: 'Dorsal ancho • Bíceps braquial • Core',
+        cues: [
+          ['Postura', 'Palmas mirando hacia ti al ancho de los hombros, torso estable y abdomen contraído.'],
+          ['Recorrido', 'Sube llevando la barbilla por encima de la barra con codos apuntando hacia adelante/abajo y baja controlado.'],
+          ['Error común', 'Hacer medias repeticiones sin bajar del todo o cruzar y patear las piernas.']
+        ]
+      },
+      'Remo Serrucho a un Brazo en Banco': {
+        archetype: 'one_arm_row',
+        views: ['Lateral', 'Frontal', 'Superior'],
+        muscles: 'Dorsal ancho • Romboides • Core antirotación',
+        cues: [
+          ['Postura', 'Mano y rodilla apoyadas en el banco horizontal, espalda paralela al piso y cadera nivelada.'],
+          ['Recorrido', 'Lleva la mancuerna en trayectoria curva hacia la cadera rozando el costado; estira abajo sin redondear lumbar.'],
+          ['Error común', 'Rotar el torso para jalar más peso o subir el codo en dirección al hombro.']
+        ]
+      },
+      'Aperturas con Banda de Resistencia': {
+        archetype: 'band_fly',
+        views: ['Lateral', 'Frontal', 'Superior'],
+        muscles: 'Pectoral mayor • Deltoide anterior',
+        cues: [
+          ['Postura', 'Rodea tu espalda o ancla la banda detrás, da un paso adelante para estabilidad y semiflexiona codos.'],
+          ['Recorrido', 'Junta las manos frente al esternón apretando el pecho 1 segundo y controla el retorno.'],
+          ['Error común', 'Encorvar los hombros hacia adelante al cerrar o perder la tensión de la banda atrás.']
+        ]
+      },
+      'Pájaros Sentado en Banco': {
+        archetype: 'rear_delt',
+        views: ['Lateral', 'Frontal', 'Superior'],
+        muscles: 'Deltoide posterior • Romboides',
+        cues: [
+          ['Postura', 'Siéntate al borde del banco e inclina el pecho hacia los muslos manteniendo la espalda recta.'],
+          ['Recorrido', 'Abre los brazos hacia los lados y ligeramente atrás (~45°) liderando con los codos, sin encoger trapecios.'],
+          ['Error común', 'Usar demasiado peso y balancear el torso hacia arriba en cada repetición.']
+        ]
+      },
+      'Press Militar Sentado en Banco': {
+        archetype: 'overhead_press',
+        views: ['Lateral (80°)', 'Frontal', 'Superior'],
+        muscles: 'Deltoide anterior y lateral • Tríceps',
+        cues: [
+          ['Postura', 'Respaldo casi vertical (80°), glúteos y espalda apoyados, codos ligeramente por delante del torso.'],
+          ['Recorrido', 'Empuja verticalmente sobre la cabeza sin chocar las mancuernas y baja con control hasta la altura de las orejas.'],
+          ['Error común', 'Arquear excesivamente la espalda baja o abrir los codos completamente hacia los lados.']
+        ]
+      },
+      'Peso Muerto Rumano con Mancuernas': {
+        archetype: 'rdl',
+        views: ['Lateral', 'Frontal', 'Posterior'],
+        muscles: 'Isquiotibiales • Glúteo mayor • Erectores espinales',
+        cues: [
+          ['Postura', 'Pies al ancho de cadera, rodillas con leve flexión fija (15°) y espalda completamente neutra.'],
+          ['Recorrido', 'Empuja la cadera hacia atrás deslizando las mancuernas pegadas a los muslos hasta mitad de espinilla y sube apretando glúteos.'],
+          ['Error común', 'Flexionar demasiado las rodillas (hacer sentadilla) o redondear la espalda baja por bajar de más.']
+        ]
+      },
+      'Curl Martillo con Mancuernas': {
+        archetype: 'hammer_curl',
+        views: ['Lateral', 'Frontal', 'Superior'],
+        muscles: 'Braquial • Braquiorradial • Bíceps',
+        cues: [
+          ['Postura', 'De pie o sentado, palmas enfrentadas (agarre neutro) y codos pegados a los costados.'],
+          ['Recorrido', 'Sube las mancuernas hacia los hombros manteniendo muñecas firmes y frena el descenso 2 segundos.'],
+          ['Error común', 'Impulsarse con la espalda baja o girar las muñecas perdiendo el agarre neutro.']
+        ]
+      },
+      'Press Francés con Mancuernas en Banco': {
+        archetype: 'french_press',
+        views: ['Lateral', 'Frontal', 'Superior'],
+        muscles: 'Tríceps braquial (énfasis cabeza larga)',
+        cues: [
+          ['Postura', 'Acostado en banco horizontal, brazos extendidos con ligera inclinación hacia atrás (~15°) para mantener tensión.'],
+          ['Recorrido', 'Flexiona solo los codos bajando las mancuernas a los lados de la cabeza y extiende sin bloquear bruscamente.'],
+          ['Error común', 'Abrir los codos hacia afuera o mover los hombros en cada repetición.']
+        ]
+      },
+      'Hip Thrust en Banco con Mancuernas': {
+        archetype: 'hip_thrust',
+        views: ['Lateral', 'Frontal', 'Superior'],
+        muscles: 'Glúteo mayor • Isquiotibiales',
+        cues: [
+          ['Postura', 'Borde inferior de las escápulas apoyado en el banco, mancuernas sobre la cadera y mentón ligeramente recogido.'],
+          ['Recorrido', 'Empuja con los talones hasta alinear hombros, cadera y rodillas (espinillas verticales arriba) apretando glúteos 1s.'],
+          ['Error común', 'Hiperextender la espalda baja arriba o colocar los pies muy cerca/lejos del banco.']
+        ]
+      }
+    };
+
+    function resolveExerciseGuide(name) {
+      if (EXERCISE_GUIDES[name]) return EXERCISE_GUIDES[name];
+      const n = (name || '').toLowerCase();
+      if (n.includes('búlgara') || n.includes('bulgara') || n.includes('zancada')) return EXERCISE_GUIDES['Sentadilla Búlgara en Banco'];
+      if (n.includes('inclinado') && (n.includes('press') || n.includes('flexion'))) return EXERCISE_GUIDES['Press Inclinado con Mancuernas'];
+      if (n.includes('press plano') || n.includes('flexion') || n.includes('press cerrado')) return EXERCISE_GUIDES['Press Plano con Mancuernas'];
+      if (n.includes('militar') || n.includes('arnold') || n.includes('wall slide')) return EXERCISE_GUIDES['Press Militar Sentado en Banco'];
+      if (n.includes('supina')) return EXERCISE_GUIDES['Dominadas Supinas en Barra'];
+      if (n.includes('dominada') || n.includes('colgada')) return EXERCISE_GUIDES['Dominadas Pronas/Neutras en Barra'];
+      if (n.includes('serrucho') || n.includes('un brazo') && n.includes('remo')) return EXERCISE_GUIDES['Remo Serrucho a un Brazo en Banco'];
+      if (n.includes('remo')) return EXERCISE_GUIDES['Remo Pecho Apoyado en Banco'];
+      if (n.includes('lateral')) return EXERCISE_GUIDES['Elevaciones Laterales con Mancuerna'];
+      if (n.includes('face pull') || n.includes('rotación externa') || n.includes('pull-apart') || n.includes('dislocac') || n.includes('escapular')) return EXERCISE_GUIDES['Face Pull con Banda en Barra'];
+      if (n.includes('pájaro') || n.includes('pajaro')) return EXERCISE_GUIDES['Pájaros Sentado en Banco'];
+      if (n.includes('apertura') && n.includes('banda')) return EXERCISE_GUIDES['Aperturas con Banda de Resistencia'];
+      if (n.includes('apertura')) return EXERCISE_GUIDES['Aperturas Inclinadas con Mancuernas'];
+      if (n.includes('martillo') || n.includes('zottman')) return EXERCISE_GUIDES['Curl Martillo con Mancuernas'];
+      if (n.includes('curl') && !n.includes('femoral')) return EXERCISE_GUIDES['Curl Inclinado en Banco 45°'];
+      if (n.includes('francés') || n.includes('frances') || n.includes('copa') || n.includes('cabeza')) return EXERCISE_GUIDES['Press Francés con Mancuernas en Banco'];
+      if (n.includes('tríceps') || n.includes('triceps') || n.includes('codo')) return EXERCISE_GUIDES['Extensión de Tríceps con Banda en Barra'];
+      if (n.includes('rumano') || n.includes('bisagra') || n.includes('good morning')) return EXERCISE_GUIDES['Peso Muerto Rumano con Mancuernas'];
+      if (n.includes('hip thrust') || n.includes('glúteo') || n.includes('gluteo') || n.includes('femoral')) return EXERCISE_GUIDES['Hip Thrust en Banco con Mancuernas'];
+      if (n.includes('sentadilla') || n.includes('goblet') || n.includes('tobillo')) return EXERCISE_GUIDES['Sentadilla Goblet Talones Elevados'];
+      return {
+        archetype: 'incline_press',
+        views: ['Lateral', 'Frontal', 'Superior'],
+        muscles: 'Técnica controlada y rango completo',
+        cues: [
+          ['Postura', 'Mantén la columna neutra, escápulas estables y base firme antes de iniciar.'],
+          ['Recorrido', 'Controla 2 segundos la fase excéntrica y sube con potencia sin perder técnica.'],
+          ['Error común', 'Usar impulso excesivo o acortar el rango de movimiento por cargar demasiado peso.']
+        ]
+      };
+    }
+
+    // Cinemática Inversa (2 huesos) para articulaciones realistas sin deformación
+    function solveIK(x0, y0, tx, ty, L1, L2, bendDir = 1) {
+      const dx = tx - x0;
+      const dy = ty - y0;
+      const rawDist = Math.hypot(dx, dy) || 0.001;
+      const minDist = Math.abs(L1 - L2) + 0.5;
+      const maxDist = L1 + L2 - 0.5;
+      const d = Math.max(minDist, Math.min(maxDist, rawDist));
+      const baseAngle = Math.atan2(dy, dx);
+      const cosA = Math.max(-1, Math.min(1, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d)));
+      const angleA = Math.acos(cosA);
+      const jointAngle = baseAngle + bendDir * angleA;
+      return {
+        jx: x0 + Math.cos(jointAngle) * L1,
+        jy: y0 + Math.sin(jointAngle) * L1,
+        ex: x0 + (dx / rawDist) * d,
+        ey: y0 + (dy / rawDist) * d
+      };
+    }
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function openTechniqueModal(exerciseName) {
+      stopTechniqueAnim();
+      const guide = resolveExerciseGuide(exerciseName);
+      techAnim.exerciseName = exerciseName;
+      techAnim.archetype = guide.archetype;
+      techAnim.viewIndex = 0;
+      techAnim.playing = true;
+      techAnim.speed = 1;
+      techAnim.showGuides = true;
+      techAnim.startTime = performance.now();
+      techAnim.pausedPhase = 0;
+
+      const ytQuery = encodeURIComponent(exerciseName + ' tecnica correcta ejecucion');
+      const ytUrl = `https://www.youtube.com/results?search_query=${ytQuery}`;
+
+      openModal(`
+        <div class="flex items-start justify-between gap-2 mb-3">
+          <div class="min-w-0">
+            <span class="inline-block px-2 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-[10px] font-extrabold uppercase tracking-wider mb-1">
+              Guía Técnica • 3 Proyecciones
+            </span>
+            <h3 class="text-base font-extrabold text-white leading-snug">${escapeHtml(exerciseName)}</h3>
+            <p class="text-[11px] text-slate-400 mt-0.5">${escapeHtml(guide.muscles)}</p>
+          </div>
+          <button onclick="closeModal()" class="p-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 shrink-0">✕</button>
+        </div>
+
+        <!-- Selector de 3 Proyecciones -->
+        <div class="grid grid-cols-3 gap-1.5 mb-3">
+          ${guide.views.map((vLabel, idx) => `
+            <button id="tech-view-btn-${idx}" onclick="setTechView(${idx})" class="py-2 px-2 rounded-xl text-[11px] font-bold transition ${
+              idx === 0
+                ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/20'
+                : 'bg-surface-800 text-slate-300 hover:bg-surface-700'
+            }">
+              ${escapeHtml(vLabel)}
+            </button>
+          `).join('')}
+        </div>
+
+        <!-- Lienzo SVG Animado -->
+        <div class="relative rounded-2xl bg-surface-950 border border-slate-800 overflow-hidden mb-3">
+          <div class="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5">
+            <span id="tech-phase-badge" class="px-2 py-0.5 rounded-lg bg-surface-900/90 border border-slate-700 text-[10px] font-extrabold text-emerald-300">
+              Excéntrica
+            </span>
+          </div>
+          <div class="absolute top-2.5 right-2.5 z-10">
+            <span id="tech-view-badge" class="px-2 py-0.5 rounded-lg bg-surface-900/90 border border-slate-700 text-[10px] font-bold text-cyan-300">
+              ${escapeHtml(guide.views[0])}
+            </span>
+          </div>
+          <svg id="tech-svg-stage" viewBox="0 0 320 220" class="w-full h-56 block select-none"></svg>
+        </div>
+
+        <!-- Controles de Reproducción -->
+        <div class="grid grid-cols-3 gap-2 mb-4">
+          <button id="tech-play-btn" onclick="toggleTechPlay()" class="py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-xs font-bold text-white">
+            ⏸ Pausar
+          </button>
+          <button id="tech-speed-btn" onclick="toggleTechSpeed()" class="py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-xs font-bold text-cyan-300">
+            Vel: 1.0x
+          </button>
+          <button id="tech-guides-btn" onclick="toggleTechGuides()" class="py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-xs font-bold text-emerald-300">
+            Guías: Sí
+          </button>
+        </div>
+
+        <!-- 3 Puntos Clave Offline -->
+        <div class="space-y-2 mb-4">
+          ${guide.cues.map(([title, desc], i) => `
+            <div class="p-3 rounded-2xl bg-surface-950/70 border border-slate-800/80 flex items-start gap-2.5">
+              <span class="w-5 h-5 rounded-lg shrink-0 flex items-center justify-center text-[10px] font-extrabold ${
+                i === 2 ? 'bg-rose-500/20 text-rose-300' : 'bg-cyan-500/20 text-cyan-300'
+              }">${i === 2 ? '!' : (i + 1)}</span>
+              <div class="text-xs leading-relaxed">
+                <span class="font-extrabold ${i === 2 ? 'text-rose-300' : 'text-white'}">${escapeHtml(title)}:</span>
+                <span class="text-slate-300"> ${escapeHtml(desc)}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <!-- Respaldo directo en YouTube -->
+        <a href="${ytUrl}" target="_blank" rel="noopener noreferrer" class="w-full py-3 rounded-2xl bg-surface-800 hover:bg-surface-700 border border-slate-700 text-xs font-bold text-slate-200 flex items-center justify-center gap-2 transition">
+          <span>▶ Ver video real en YouTube</span>
+          <span class="text-slate-400">↗</span>
+        </a>
+      `);
+
+      startTechniqueAnim();
+    }
+
+    function setTechView(idx) {
+      techAnim.viewIndex = idx;
+      const guide = resolveExerciseGuide(techAnim.exerciseName);
+      [0, 1, 2].forEach(i => {
+        const btn = document.getElementById(`tech-view-btn-${i}`);
+        if (!btn) return;
+        if (i === idx) {
+          btn.className = 'py-2 px-2 rounded-xl text-[11px] font-bold transition bg-cyan-600 text-white shadow-md shadow-cyan-600/20';
+        } else {
+          btn.className = 'py-2 px-2 rounded-xl text-[11px] font-bold transition bg-surface-800 text-slate-300 hover:bg-surface-700';
+        }
+      });
+      const vb = document.getElementById('tech-view-badge');
+      if (vb) vb.textContent = guide.views[idx] || '';
+      renderTechFrame(techAnim.pausedPhase);
+    }
+
+    function toggleTechPlay() {
+      techAnim.playing = !techAnim.playing;
+      const btn = document.getElementById('tech-play-btn');
+      if (btn) btn.textContent = techAnim.playing ? '⏸ Pausar' : '▶ Reproducir';
+      if (techAnim.playing) {
+        techAnim.startTime = performance.now() - techAnim.pausedPhase * (3600 / techAnim.speed);
+        startTechniqueAnim();
+      } else {
+        stopTechniqueAnim();
+      }
+    }
+
+    function toggleTechSpeed() {
+      techAnim.speed = techAnim.speed === 1 ? 0.5 : 1;
+      const btn = document.getElementById('tech-speed-btn');
+      if (btn) btn.textContent = `Vel: ${techAnim.speed.toFixed(1)}x`;
+      if (techAnim.playing) {
+        techAnim.startTime = performance.now() - techAnim.pausedPhase * (3600 / techAnim.speed);
+      }
+    }
+
+    function toggleTechGuides() {
+      techAnim.showGuides = !techAnim.showGuides;
+      const btn = document.getElementById('tech-guides-btn');
+      if (btn) btn.textContent = techAnim.showGuides ? 'Guías: Sí' : 'Guías: No';
+      renderTechFrame(techAnim.pausedPhase);
+    }
+
+    function startTechniqueAnim() {
+      stopTechniqueAnim();
+      const loop = (now) => {
+        if (!document.getElementById('tech-svg-stage')) {
+          stopTechniqueAnim();
+          return;
+        }
+        const cycleMs = 3600 / techAnim.speed;
+        const phase = ((now - techAnim.startTime) % cycleMs) / cycleMs; // 0..1
+        techAnim.pausedPhase = phase;
+        renderTechFrame(phase);
+        if (techAnim.playing) {
+          techAnim.rafId = requestAnimationFrame(loop);
+        }
+      };
+      techAnim.rafId = requestAnimationFrame(loop);
+    }
+
+    function stopTechniqueAnim() {
+      if (techAnim.rafId) {
+        cancelAnimationFrame(techAnim.rafId);
+        techAnim.rafId = null;
+      }
+    }
+
+    // Convierte phase (0..1) en progreso suave p (0 = inicio, 1 = punto máximo, 0 = retorno) con micro-pausas
+    function getSmoothProgress(phase) {
+      let p = 0;
+      let label = 'Inicio';
+      if (phase < 0.08) {
+        p = 0; label = 'Posición inicial';
+      } else if (phase < 0.46) {
+        const u = (phase - 0.08) / 0.38;
+        p = 0.5 - 0.5 * Math.cos(u * Math.PI);
+        label = 'Fase activa';
+      } else if (phase < 0.58) {
+        p = 1; label = 'Pausa / Contracción';
+      } else if (phase < 0.94) {
+        const u = (phase - 0.58) / 0.36;
+        p = 0.5 + 0.5 * Math.cos(u * Math.PI);
+        label = 'Control / Retorno';
+      } else {
+        p = 0; label = 'Posición inicial';
+      }
+      return { p, label };
+    }
+
+    function svgBgGrid() {
+      return `
+        <defs>
+          <pattern id="ah-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+            <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#1e293b" stroke-width="0.6" opacity="0.55"/>
+          </pattern>
+          <radialGradient id="ah-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#10b981" stop-opacity="0.55"/>
+            <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <rect width="320" height="220" fill="#070b14"/>
+        <rect width="320" height="220" fill="url(#ah-grid)"/>
+      `;
+    }
+
+    function drawDumbbell(x, y, angleDeg = 0, scale = 1) {
+      return `
+        <g transform="translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${angleDeg.toFixed(1)}) scale(${scale})">
+          <line x1="-11" y1="0" x2="11" y2="0" stroke="#94a3b8" stroke-width="3.5" stroke-linecap="round"/>
+          <rect x="-15" y="-6.5" width="5.5" height="13" rx="2" fill="#38bdf8" stroke="#070b14" stroke-width="1"/>
+          <rect x="9.5" y="-6.5" width="5.5" height="13" rx="2" fill="#38bdf8" stroke="#070b14" stroke-width="1"/>
+        </g>
+      `;
+    }
+
+    function drawJoint(x, y, r = 4, fill = '#e2e8f0') {
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${fill}" stroke="#070b14" stroke-width="1.5"/>`;
+    }
+
+    function drawLimb(x1, y1, x2, y2, w = 8, color = '#cbd5e1') {
+      return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${color}" stroke-width="${w}" stroke-linecap="round"/>`;
+    }
+
+    function drawGlow(x, y, r = 18) {
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="url(#ah-glow)"/>`;
+    }
+
+    function renderTechFrame(phase) {
+      const svg = document.getElementById('tech-svg-stage');
+      if (!svg) return;
+      const { p, label } = getSmoothProgress(phase);
+      const badge = document.getElementById('tech-phase-badge');
+      if (badge) badge.textContent = label;
+
+      const v = techAnim.viewIndex;
+      const g = techAnim.showGuides;
+      const arch = techAnim.archetype;
+      let content = svgBgGrid();
+
+      // =====================================================================
+      // 1. SENTADILLA BÚLGARA EN BANCO (IK REAL + EMPEINE PLANO EN EL BANCO)
+      // =====================================================================
+      if (arch === 'bulgarian') {
+        if (v === 0) {
+          // VISTA LATERAL CON CINEMÁTICA INVERSA REAL
+          const floorY = 198;
+          const benchTopY = 148;
+          const benchEdgeX = 116;
+          const frontAnkle = { x: 220, y: 190 };
+          const backAnkle = { x: 114, y: 144 }; // Exactamente sobre el borde superior del banco
+
+          const hx = lerp(176, 168, p);
+          const hy = lerp(112, 150, p);
+          const shx = hx + lerp(6, 12, p); // Ligera inclinación del torso hacia adelante
+          const shy = hy - 48;
+
+          const fLeg = solveIK(hx, hy, frontAnkle.x, frontAnkle.y, 48, 48, -1);
+          const bLeg = solveIK(hx, hy, backAnkle.x, backAnkle.y, 48, 48, -1);
+
+          // Suelo y banco realista
+          content += `<line x1="20" y1="${floorY}" x2="300" y2="${floorY}" stroke="#334155" stroke-width="2"/>`;
+          // Banco (lado izquierdo)
+          content += `<rect x="44" y="${benchTopY}" width="${benchEdgeX - 44}" height="12" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>`;
+          content += `<line x1="56" y1="${benchTopY + 12}" x2="52" y2="${floorY}" stroke="#475569" stroke-width="4" stroke-linecap="round"/>`;
+          content += `<line x1="${benchEdgeX - 12}" y1="${benchTopY + 12}" x2="${benchEdgeX - 8}" y2="${floorY}" stroke="#475569" stroke-width="4" stroke-linecap="round"/>`;
+
+          if (g) {
+            // Línea vertical de descenso de cadera + guía de empeine
+            content += `<line x1="${hx.toFixed(1)}" y1="95" x2="${hx.toFixed(1)}" y2="195" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="4 4" opacity="0.65"/>`;
+            content += `<text x="52" y="${benchTopY - 8}" fill="#38bdf8" font-size="9" font-weight="700">Empeine plano</text>`;
+            content += `<text x="200" y="182" fill="#10b981" font-size="9" font-weight="700">Pie firme</text>`;
+          }
+
+          // Pierna trasera (empeine apoyado plano sobre el banco, dedos hacia atrás)
+          content += drawLimb(hx, hy, bLeg.jx, bLeg.jy, 8, '#64748b');
+          content += drawLimb(bLeg.jx, bLeg.jy, backAnkle.x, backAnkle.y, 7, '#64748b');
+          // Pie trasero (empeine sobre y=benchTopY, apuntando hacia atrás/izquierda)
+          content += `<path d="M ${backAnkle.x} ${backAnkle.y} L ${backAnkle.x - 24} ${benchTopY - 1} L ${backAnkle.x - 22} ${benchTopY - 6} L ${backAnkle.x - 2} ${backAnkle.y - 4} Z" fill="#94a3b8"/>`;
+          content += drawJoint(bLeg.jx, bLeg.jy, 3.5, '#94a3b8');
+          content += drawJoint(backAnkle.x, backAnkle.y, 3, '#cbd5e1');
+
+          // Resaltado muscular (cuádriceps y glúteo delantero)
+          content += drawGlow((hx + fLeg.jx) / 2, (hy + fLeg.jy) / 2, 22);
+          content += drawGlow(hx - 4, hy + 2, 16);
+
+          // Pierna delantera (activa)
+          content += drawLimb(hx, hy, fLeg.jx, fLeg.jy, 10, '#e2e8f0');
+          content += drawLimb(fLeg.jx, fLeg.jy, frontAnkle.x, frontAnkle.y, 9, '#cbd5e1');
+          // Pie delantero plano en el suelo
+          content += `<path d="M ${frontAnkle.x - 8} ${floorY - 1} L ${frontAnkle.x + 22} ${floorY - 1} L ${frontAnkle.x + 18} ${floorY - 7} L ${frontAnkle.x - 6} ${frontAnkle.y - 1} Z" fill="#e2e8f0"/>`;
+          content += drawJoint(fLeg.jx, fLeg.jy, 4.5, '#10b981');
+
+          // Torso y cabeza
+          content += drawLimb(hx, hy, shx, shy, 11, '#f1f5f9');
+          content += `<circle cx="${(shx + 4).toFixed(1)}" cy="${(shy - 14).toFixed(1)}" r="10.5" fill="#cbd5e1"/>`;
+          // Brazo sosteniendo mancuerna vertical al costado
+          const handX = shx + 2;
+          const handY = shy + 44;
+          content += drawLimb(shx, shy + 2, handX, handY, 6.5, '#94a3b8');
+          content += drawDumbbell(handX, handY + 2, 0, 0.85);
+          content += drawJoint(hx, hy, 4, '#22d3ee');
+        } else if (v === 1) {
+          // VISTA FRONTAL (Alineación rodilla-pie y separación de pies al ancho de cadera)
+          const floorY = 198;
+          const drop = lerp(0, 34, p);
+          const hipY = 112 + drop;
+          const shY = 64 + drop;
+          content += `<line x1="30" y1="${floorY}" x2="290" y2="${floorY}" stroke="#334155" stroke-width="2"/>`;
+          // Banco detrás
+          content += `<rect x="105" y="136" width="110" height="12" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1.2"/>`;
+          // Pierna trasera (lado izquierdo de pantalla = pierna derecha atrás, alineada al ancho de cadera)
+          content += drawLimb(144, hipY, 138, 150 + drop * 0.65, 7, '#64748b');
+          content += `<ellipse cx="136" cy="138" rx="7" ry="4" fill="#94a3b8"/>`;
+          // Pierna delantera (lado derecho de pantalla, alineada recta)
+          content += drawGlow(176, (hipY + 150) / 2, 20);
+          content += drawLimb(176, hipY, 176, 150 + drop * 0.2, 10, '#e2e8f0');
+          content += drawLimb(176, 150 + drop * 0.2, 176, 192, 9, '#cbd5e1');
+          content += `<rect x="168" y="191" width="16" height="6" rx="3" fill="#e2e8f0"/>`;
+          if (g) {
+            content += `<line x1="176" y1="100" x2="176" y2="198" stroke="#10b981" stroke-width="1.3" stroke-dasharray="4 3"/>`;
+            content += `<line x1="136" y1="100" x2="136" y2="198" stroke="#38bdf8" stroke-width="1" stroke-dasharray="3 3" opacity="0.6"/>`;
+            content += `<text x="184" y="168" fill="#10b981" font-size="9" font-weight="700">Rodilla recta</text>`;
+            content += `<text x="58" y="128" fill="#38bdf8" font-size="9" font-weight="700">Ancho cadera</text>`;
+          }
+          // Torso y brazos con mancuernas
+          content += `<rect x="142" y="${shY}" width="36" height="50" rx="12" fill="#e2e8f0"/>`;
+          content += `<circle cx="160" cy="${shY - 14}" r="11" fill="#cbd5e1"/>`;
+          content += drawLimb(140, shY + 6, 134, shY + 52, 6, '#94a3b8');
+          content += drawLimb(180, shY + 6, 186, shY + 52, 6, '#94a3b8');
+          content += drawDumbbell(134, shY + 54, 90, 0.8);
+          content += drawDumbbell(186, shY + 54, 90, 0.8);
+        } else {
+          // VISTA POSTERIOR (Cadera nivelada + empeine apoyado atrás)
+          const floorY = 198;
+          const drop = lerp(0, 34, p);
+          const hipY = 112 + drop;
+          const shY = 64 + drop;
+          content += `<line x1="30" y1="${floorY}" x2="290" y2="${floorY}" stroke="#334155" stroke-width="2"/>`;
+          content += `<rect x="100" y="142" width="120" height="12" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>`;
+          // Glúteo y pierna delantera
+          content += drawGlow(144, hipY + 4, 20);
+          content += drawLimb(144, hipY, 144, 192, 10, '#cbd5e1');
+          // Pierna trasera con empeine visible sobre el banco
+          content += drawLimb(176, hipY, 176, 152 + drop * 0.5, 8, '#94a3b8');
+          content += `<rect x="169" y="138" width="14" height="10" rx="4" fill="#38bdf8"/>`;
+          // Torso posterior
+          content += `<rect x="140" y="${shY}" width="40" height="50" rx="12" fill="#cbd5e1"/>`;
+          content += `<circle cx="160" cy="${shY - 14}" r="11" fill="#94a3b8"/>`;
+          if (g) {
+            content += `<line x1="126" y1="${hipY}" x2="194" y2="${hipY}" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+            content += `<text x="198" y="${hipY + 3}" fill="#10b981" font-size="9" font-weight="700">Cadera nivelada</text>`;
+          }
+        }
+      }
+
+      // =====================================================================
+      // 2. PRESS INCLINADO / PRESS PLANO / PRESS MILITAR (Mancuernas)
+      // =====================================================================
+      else if (arch === 'incline_press' || arch === 'flat_press' || arch === 'overhead_press') {
+        const isFlat = arch === 'flat_press';
+        const isOH = arch === 'overhead_press';
+        if (v === 0) {
+          // VISTA LATERAL
+          const floorY = 198;
+          content += `<line x1="20" y1="${floorY}" x2="300" y2="${floorY}" stroke="#334155" stroke-width="2"/>`;
+          let shX, shY, hipX, hipY, handStartX, handStartY, handEndX, handEndY;
+          if (isFlat) {
+            // Banco horizontal
+            content += `<rect x="70" y="146" width="150" height="12" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>`;
+            content += `<line x1="88" y1="158" x2="88" y2="${floorY}" stroke="#475569" stroke-width="4"/>`;
+            content += `<line x1="200" y1="158" x2="200" y2="${floorY}" stroke="#475569" stroke-width="4"/>`;
+            shX = 114; shY = 136; hipX = 186; hipY = 138;
+            content += drawLimb(hipX, hipY, 224, 152, 9, '#94a3b8');
+            content += drawLimb(224, 152, 230, 194, 8, '#94a3b8');
+            content += drawLimb(shX, shY, hipX, hipY, 12, '#e2e8f0');
+            content += `<circle cx="94" cy="134" r="10" fill="#cbd5e1"/>`;
+            handStartX = 122; handStartY = 124; handEndX = 118; handEndY = 72;
+          } else if (isOH) {
+            // Banco casi vertical 80°
+            content += `<line x1="126" y1="146" x2="112" y2="74" stroke="#475569" stroke-width="10" stroke-linecap="round"/>`;
+            content += `<rect x="122" y="144" width="60" height="11" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>`;
+            content += `<line x1="132" y1="155" x2="128" y2="${floorY}" stroke="#475569" stroke-width="4"/>`;
+            content += `<line x1="172" y1="155" x2="176" y2="${floorY}" stroke="#475569" stroke-width="4"/>`;
+            hipX = 148; hipY = 136; shX = 138; shY = 86;
+            content += drawLimb(hipX, hipY, 194, 144, 9, '#94a3b8');
+            content += drawLimb(194, 144, 198, 194, 8, '#94a3b8');
+            content += drawLimb(hipX, hipY, shX, shY, 12, '#e2e8f0');
+            content += `<circle cx="140" cy="68" r="10.5" fill="#cbd5e1"/>`;
+            handStartX = 148; handStartY = 78; handEndX = 140; handEndY = 26;
+          } else {
+            // Banco inclinado 30°
+            content += `<line x1="146" y1="152" x2="80" y2="114" stroke="#475569" stroke-width="10" stroke-linecap="round"/>`;
+            content += `<rect x="142" y="150" width="54" height="11" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>`;
+            content += `<line x1="94" y1="126" x2="90" y2="${floorY}" stroke="#475569" stroke-width="4"/>`;
+            content += `<line x1="184" y1="161" x2="188" y2="${floorY}" stroke="#475569" stroke-width="4"/>`;
+            hipX = 156; hipY = 142; shX = 104; shY = 112;
+            content += drawLimb(hipX, hipY, 206, 152, 9, '#94a3b8');
+            content += drawLimb(206, 152, 212, 194, 8, '#94a3b8');
+            content += drawLimb(hipX, hipY, shX, shY, 12, '#e2e8f0');
+            content += `<circle cx="88" cy="100" r="10" fill="#cbd5e1"/>`;
+            handStartX = 116; handStartY = 106; handEndX = 114; handEndY = 50;
+          }
+          const hx = lerp(handStartX, handEndX, p);
+          const hy = lerp(handStartY, handEndY, p);
+          const arm = solveIK(shX, shY, hx, hy, 32, 32, 1);
+          content += drawGlow(shX + 8, shY + 4, 18);
+          if (g) {
+            content += `<line x1="${handEndX}" y1="${handEndY}" x2="${handStartX}" y2="${handStartY + 12}" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+          }
+          content += drawLimb(shX, shY, arm.jx, arm.jy, 7.5, '#cbd5e1');
+          content += drawLimb(arm.jx, arm.jy, hx, hy, 7, '#f1f5f9');
+          content += drawDumbbell(hx, hy, 0, 0.9);
+          content += drawJoint(arm.jx, arm.jy, 3.5, '#10b981');
+        } else if (v === 1) {
+          // VISTA FRONTAL (simetría y trayectoria convergente)
+          const shY = isOH ? 118 : 138;
+          const handY = lerp(shY - 6, isOH ? 34 : 52, p);
+          const handSpread = lerp(52, 26, p);
+          const elbowY = lerp(shY + 16, shY - 26, p);
+          const elbowSpread = lerp(58, 34, p);
+          content += `<rect x="136" y="${shY - 6}" width="48" height="68" rx="14" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>`;
+          content += `<rect x="140" y="${shY}" width="40" height="52" rx="12" fill="#e2e8f0"/>`;
+          content += `<circle cx="160" cy="${shY - 16}" r="11" fill="#cbd5e1"/>`;
+          content += drawGlow(144, shY + 8, 16);
+          content += drawGlow(176, shY + 8, 16);
+          // Brazos izq y der
+          content += drawLimb(140, shY + 4, 160 - elbowSpread, elbowY, 7.5, '#cbd5e1');
+          content += drawLimb(160 - elbowSpread, elbowY, 160 - handSpread, handY, 7, '#f1f5f9');
+          content += drawLimb(180, shY + 4, 160 + elbowSpread, elbowY, 7.5, '#cbd5e1');
+          content += drawLimb(160 + elbowSpread, elbowY, 160 + handSpread, handY, 7, '#f1f5f9');
+          content += drawDumbbell(160 - handSpread, handY, 0, 0.85);
+          content += drawDumbbell(160 + handSpread, handY, 0, 0.85);
+          if (g) {
+            content += `<path d="M ${160 - 52} ${shY - 6} Q ${160 - 44} ${shY - 45} ${160 - 26} ${isOH ? 34 : 52}" fill="none" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+            content += `<path d="M ${160 + 52} ${shY - 6} Q ${160 + 44} ${shY - 45} ${160 + 26} ${isOH ? 34 : 52}" fill="none" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+          }
+        } else {
+          // VISTA SUPERIOR (Ángulo de codos a 45° — clave para cuidar hombros)
+          const cy = 115;
+          const elbowBack = lerp(24, 4, p);
+          const handOut = lerp(52, 24, p);
+          content += `<rect x="132" y="55" width="56" height="115" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>`;
+          content += `<ellipse cx="160" cy="${cy}" rx="30" ry="18" fill="#e2e8f0"/>`;
+          content += `<circle cx="160" cy="${cy - 22}" r="11" fill="#cbd5e1"/>`;
+          content += drawGlow(144, cy, 15);
+          content += drawGlow(176, cy, 15);
+          // Codos a 45° (hacia abajo/pies, NO a 90° en T)
+          content += drawLimb(136, cy, 160 - handOut, cy + elbowBack, 8, '#cbd5e1');
+          content += drawLimb(184, cy, 160 + handOut, cy + elbowBack, 8, '#cbd5e1');
+          content += drawDumbbell(160 - handOut, cy + elbowBack, -20, 0.9);
+          content += drawDumbbell(160 + handOut, cy + elbowBack, 20, 0.9);
+          if (g) {
+            content += `<line x1="160" y1="${cy}" x2="160" y2="185" stroke="#64748b" stroke-width="1" stroke-dasharray="3 3"/>`;
+            content += `<text x="195" y="${cy + 36}" fill="#10b981" font-size="9.5" font-weight="700">Codos ~45°</text>`;
+            content += `<text x="64" y="${cy + 36}" fill="#38bdf8" font-size="9.5" font-weight="700">Hombros seguros</text>`;
+          }
+        }
+      }
+
+      // =====================================================================
+      // 3. DOMINADAS PRONAS / SUPINAS
+      // =====================================================================
+      else if (arch === 'pullup' || arch === 'chinup') {
+        const isSup = arch === 'chinup';
+        const barY = 36;
+        const pullUp = lerp(0, 50, p);
+        if (v === 0) {
+          // LATERAL
+          content += `<circle cx="160" cy="${barY}" r="5" fill="#38bdf8"/>`;
+          const shX = 160, shY = 104 - pullUp;
+          const hipX = 162, hipY = 152 - pullUp;
+          const arm = solveIK(shX, shY, 160, barY, 35, 35, 1);
+          content += drawGlow(shX - 4, shY + 14, 18);
+          content += drawLimb(shX, shY, arm.jx, arm.jy, 7.5, '#cbd5e1');
+          content += drawLimb(arm.jx, arm.jy, 160, barY, 7, '#f1f5f9');
+          content += drawLimb(shX, shY, hipX, hipY, 11, '#e2e8f0');
+          content += drawLimb(hipX, hipY, hipX - 4, hipY + 42, 8.5, '#94a3b8');
+          content += `<circle cx="${shX + 4}" cy="${shY - 14}" r="10" fill="#cbd5e1"/>`;
+          if (g) {
+            content += `<line x1="160" y1="36" x2="160" y2="195" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+            content += `<text x="180" y="54" fill="#10b981" font-size="9" font-weight="700">Pecho a barra</text>`;
+          }
+        } else {
+          // FRONTAL (v=1) o POSTERIOR (v=2)
+          const gripW = isSup ? 26 : 44;
+          const shY = 104 - pullUp;
+          content += `<line x1="50" y1="${barY}" x2="270" y2="${barY}" stroke="#38bdf8" stroke-width="5" stroke-linecap="round"/>`;
+          const lArm = solveIK(140, shY + 4, 160 - gripW, barY, 36, 36, -1);
+          const rArm = solveIK(180, shY + 4, 160 + gripW, barY, 36, 36, 1);
+          if (v === 2) {
+            content += drawGlow(144, shY + 18, 18);
+            content += drawGlow(176, shY + 18, 18);
+          } else {
+            content += drawGlow(lArm.jx, lArm.jy, 14);
+            content += drawGlow(rArm.jx, rArm.jy, 14);
+          }
+          content += drawLimb(140, shY + 4, lArm.jx, lArm.jy, 7.5, '#cbd5e1');
+          content += drawLimb(lArm.jx, lArm.jy, 160 - gripW, barY, 7, '#f1f5f9');
+          content += drawLimb(180, shY + 4, rArm.jx, rArm.jy, 7.5, '#cbd5e1');
+          content += drawLimb(rArm.jx, rArm.jy, 160 + gripW, barY, 7, '#f1f5f9');
+          content += `<rect x="140" y="${shY}" width="40" height="52" rx="12" fill="${v === 2 ? '#cbd5e1' : '#e2e8f0'}"/>`;
+          content += drawLimb(150, shY + 50, 150, shY + 94, 8, '#94a3b8');
+          content += drawLimb(170, shY + 50, 170, shY + 94, 8, '#94a3b8');
+          content += `<circle cx="160" cy="${shY - 14}" r="10.5" fill="${v === 2 ? '#94a3b8' : '#cbd5e1'}"/>`;
+          if (g && v === 2) {
+            content += `<text x="112" y="198" fill="#10b981" font-size="9.5" font-weight="700">Escápulas abajo y juntas</text>`;
+          }
+        }
+      }
+
+      // =====================================================================
+      // 4. ELEVACIONES LATERALES / PÁJAROS / FACE PULL
+      // =====================================================================
+      else if (arch === 'lateral_raise' || arch === 'rear_delt' || arch === 'face_pull') {
+        if (arch === 'lateral_raise') {
+          if (v === 0) {
+            // FRONTAL
+            const ang = lerp(80, 4, p) * Math.PI / 180;
+            const shY = 78;
+            content += `<rect x="140" y="${shY}" width="40" height="62" rx="12" fill="#e2e8f0"/>`;
+            content += `<circle cx="160" cy="${shY - 16}" r="11" fill="#cbd5e1"/>`;
+            content += drawLimb(150, 140, 148, 198, 9, '#94a3b8');
+            content += drawLimb(170, 140, 172, 198, 9, '#94a3b8');
+            content += drawGlow(138, shY + 4, 16);
+            content += drawGlow(182, shY + 4, 16);
+            const lx = 138 - Math.cos(ang) * 58, ly = shY + 4 + Math.sin(ang) * 58;
+            const rx = 182 + Math.cos(ang) * 58, ry = shY + 4 + Math.sin(ang) * 58;
+            content += drawLimb(138, shY + 4, lx, ly, 7.5, '#f1f5f9');
+            content += drawLimb(182, shY + 4, rx, ry, 7.5, '#f1f5f9');
+            content += drawDumbbell(lx, ly, -ang * 180 / Math.PI, 0.78);
+            content += drawDumbbell(rx, ry, ang * 180 / Math.PI, 0.78);
+            if (g) {
+              content += `<line x1="65" y1="${shY + 4}" x2="255" y2="${shY + 4}" stroke="#22d3ee" stroke-width="1" stroke-dasharray="4 3"/>`;
+              content += `<text x="218" y="${shY - 4}" fill="#22d3ee" font-size="9" font-weight="700">Altura hombro</text>`;
+            }
+          } else if (v === 1) {
+            // LATERAL
+            const shX = 156, shY = 78;
+            content += drawLimb(shX, shY, 152, 140, 12, '#e2e8f0');
+            content += drawLimb(152, 140, 154, 198, 9.5, '#94a3b8');
+            content += `<circle cx="158" cy="62" r="10.5" fill="#cbd5e1"/>`;
+            const hx = lerp(158, 176, p), hy = lerp(132, 82, p);
+            content += drawGlow(shX, shY, 16);
+            content += drawLimb(shX, shY, hx, hy, 7.5, '#f1f5f9');
+            content += drawDumbbell(hx, hy, 0, 0.8);
+            if (g) content += `<text x="186" y="84" fill="#10b981" font-size="9" font-weight="700">Ligeramente al frente</text>`;
+          } else {
+            // SUPERIOR (Plano escapular a 30°)
+            const cy = 116;
+            const reach = lerp(24, 72, p);
+            const fwd = lerp(4, 24, p);
+            content += `<ellipse cx="160" cy="${cy}" rx="28" ry="15" fill="#e2e8f0"/>`;
+            content += `<circle cx="160" cy="${cy - 4}" r="11" fill="#cbd5e1"/>`;
+            content += drawGlow(136, cy, 14);
+            content += drawGlow(184, cy, 14);
+            content += drawLimb(136, cy, 160 - reach, cy - fwd, 7.5, '#f1f5f9');
+            content += drawLimb(184, cy, 160 + reach, cy - fwd, 7.5, '#f1f5f9');
+            content += drawDumbbell(160 - reach, cy - fwd, 25, 0.8);
+            content += drawDumbbell(160 + reach, cy - fwd, -25, 0.8);
+            if (g) {
+              content += `<line x1="60" y1="${cy}" x2="260" y2="${cy}" stroke="#64748b" stroke-width="1" stroke-dasharray="3 3"/>`;
+              content += `<text x="108" y="64" fill="#10b981" font-size="9.5" font-weight="700">Plano escapular (~30° adelante)</text>`;
+            }
+          }
+        } else if (arch === 'face_pull') {
+          if (v === 0) {
+            // LATERAL con banda anclada a la derecha
+            const anchorX = 278, anchorY = 66;
+            const shX = 132, shY = 82;
+            const hx = lerp(206, 138, p), hy = lerp(74, 62, p);
+            const arm = solveIK(shX, shY, hx, hy, 34, 34, 1);
+            content += `<circle cx="${anchorX}" cy="${anchorY}" r="5" fill="#38bdf8"/>`;
+            content += `<line x1="${anchorX}" y1="${anchorY}" x2="${hx}" y2="${hy}" stroke="#f59e0b" stroke-width="3.5" stroke-linecap="round"/>`;
+            content += drawLimb(shX, shY, 128, 144, 12, '#e2e8f0');
+            content += drawLimb(128, 144, 136, 198, 9, '#94a3b8');
+            content += `<circle cx="134" cy="64" r="10.5" fill="#cbd5e1"/>`;
+            content += drawGlow(shX - 4, shY, 16);
+            content += drawLimb(shX, shY, arm.jx, arm.jy, 7.5, '#cbd5e1');
+            content += drawLimb(arm.jx, arm.jy, hx, hy, 7, '#f1f5f9');
+          } else if (v === 1) {
+            // FRONTAL (pose doble bíceps al final)
+            const spread = lerp(18, 56, p);
+            const handY = lerp(86, 58, p);
+            content += `<rect x="140" y="84" width="40" height="60" rx="12" fill="#e2e8f0"/>`;
+            content += `<circle cx="160" cy="66" r="11" fill="#cbd5e1"/>`;
+            content += `<line x1="160" y1="74" x2="${160 - spread}" y2="${handY}" stroke="#f59e0b" stroke-width="3"/>`;
+            content += `<line x1="160" y1="74" x2="${160 + spread}" y2="${handY}" stroke="#f59e0b" stroke-width="3"/>`;
+            content += drawLimb(140, 88, 160 - spread, 88, 7.5, '#cbd5e1');
+            content += drawLimb(160 - spread, 88, 160 - spread, handY, 7, '#f1f5f9');
+            content += drawLimb(180, 88, 160 + spread, 88, 7.5, '#cbd5e1');
+            content += drawLimb(160 + spread, 88, 160 + spread, handY, 7, '#f1f5f9');
+            if (g) content += `<text x="108" y="182" fill="#10b981" font-size="9.5" font-weight="700">Rotación externa arriba</text>`;
+          } else {
+            // SUPERIOR
+            const cy = 140;
+            const elbowY = lerp(110, 152, p);
+            const spread = lerp(24, 62, p);
+            content += `<circle cx="160" cy="36" r="5" fill="#38bdf8"/>`;
+            content += `<line x1="160" y1="36" x2="${160 - spread}" y2="${elbowY - 12}" stroke="#f59e0b" stroke-width="3"/>`;
+            content += `<line x1="160" y1="36" x2="${160 + spread}" y2="${elbowY - 12}" stroke="#f59e0b" stroke-width="3"/>`;
+            content += `<ellipse cx="160" cy="${cy}" rx="28" ry="14" fill="#e2e8f0"/>`;
+            content += `<circle cx="160" cy="${cy - 4}" r="11" fill="#cbd5e1"/>`;
+            content += drawGlow(144, cy + 6, 14);
+            content += drawGlow(176, cy + 6, 14);
+            content += drawLimb(136, cy, 160 - spread, elbowY, 7.5, '#f1f5f9');
+            content += drawLimb(184, cy, 160 + spread, elbowY, 7.5, '#f1f5f9');
+          }
+        } else {
+          // PÁJAROS SENTADO EN BANCO
+          if (v === 0) {
+            content += `<rect x="76" y="148" width="90" height="11" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>`;
+            content += `<line x1="90" y1="159" x2="90" y2="198" stroke="#475569" stroke-width="4"/>`;
+            content += `<line x1="152" y1="159" x2="152" y2="198" stroke="#475569" stroke-width="4"/>`;
+            const hipX = 114, hipY = 140, shX = 164, shY = 114;
+            content += drawLimb(hipX, hipY, 174, 144, 9, '#94a3b8');
+            content += drawLimb(174, 144, 178, 194, 8, '#94a3b8');
+            content += drawLimb(hipX, hipY, shX, shY, 12, '#e2e8f0');
+            content += `<circle cx="180" cy="108" r="10" fill="#cbd5e1"/>`;
+            const hx = lerp(164, 142, p), hy = lerp(168, 118, p);
+            content += drawGlow(shX - 4, shY, 16);
+            content += drawLimb(shX, shY, hx, hy, 7.5, '#f1f5f9');
+            content += drawDumbbell(hx, hy, 0, 0.8);
+          } else if (v === 1) {
+            const ang = lerp(80, 6, p) * Math.PI / 180;
+            content += `<ellipse cx="160" cy="112" rx="26" ry="20" fill="#e2e8f0"/>`;
+            content += `<circle cx="160" cy="96" r="10.5" fill="#cbd5e1"/>`;
+            const lx = 136 - Math.cos(ang) * 56, ly = 112 + Math.sin(ang) * 56;
+            const rx = 184 + Math.cos(ang) * 56, ry = 112 + Math.sin(ang) * 56;
+            content += drawLimb(136, 112, lx, ly, 7.5, '#f1f5f9');
+            content += drawLimb(184, 112, rx, ry, 7.5, '#f1f5f9');
+            content += drawDumbbell(lx, ly, 0, 0.78);
+            content += drawDumbbell(rx, ry, 0, 0.78);
+          } else {
+            // SUPERIOR (apertura 45°)
+            const cy = 110;
+            const reach = lerp(24, 72, p), back = lerp(0, 26, p);
+            content += `<ellipse cx="160" cy="${cy}" rx="28" ry="18" fill="#e2e8f0"/>`;
+            content += `<circle cx="160" cy="${cy - 22}" r="10.5" fill="#cbd5e1"/>`;
+            content += drawGlow(144, cy + 4, 15);
+            content += drawGlow(176, cy + 4, 15);
+            content += drawLimb(136, cy, 160 - reach, cy + back, 7.5, '#f1f5f9');
+            content += drawLimb(184, cy, 160 + reach, cy + back, 7.5, '#f1f5f9');
+            content += drawDumbbell(160 - reach, cy + back, 0, 0.8);
+            content += drawDumbbell(160 + reach, cy + back, 0, 0.8);
+          }
+        }
+      }
+
+      // =====================================================================
+      // 5. REMOS (PECHO APOYADO / SERRUCHO A UN BRAZO)
+      // =====================================================================
+      else if (arch === 'chest_row' || arch === 'one_arm_row') {
+        const isOne = arch === 'one_arm_row';
+        if (v === 0) {
+          content += `<line x1="20" y1="198" x2="300" y2="198" stroke="#334155" stroke-width="2"/>`;
+          if (isOne) {
+            content += `<rect x="74" y="142" width="150" height="12" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>`;
+            content += `<line x1="88" y1="154" x2="88" y2="198" stroke="#475569" stroke-width="4"/>`;
+            content += `<line x1="208" y1="154" x2="208" y2="198" stroke="#475569" stroke-width="4"/>`;
+            const hipX = 116, hipY = 104, shX = 186, shY = 100;
+            content += drawLimb(hipX, hipY, 118, 140, 8.5, '#94a3b8');
+            content += drawLimb(shX, shY, 198, 140, 7, '#64748b'); // brazo apoyo
+            content += drawLimb(hipX, hipY, shX, shY, 12, '#e2e8f0');
+            content += `<circle cx="204" cy="96" r="10" fill="#cbd5e1"/>`;
+            const hx = lerp(184, 152, p), hy = lerp(162, 116, p);
+            const arm = solveIK(shX, shY, hx, hy, 32, 32, -1);
+            content += drawGlow(156, 102, 18);
+            content += drawLimb(shX, shY, arm.jx, arm.jy, 7.5, '#cbd5e1');
+            content += drawLimb(arm.jx, arm.jy, hx, hy, 7, '#f1f5f9');
+            content += drawDumbbell(hx, hy, 0, 0.85);
+          } else {
+            // Pecho apoyado en banco 35°
+            content += `<line x1="126" y1="154" x2="196" y2="108" stroke="#475569" stroke-width="10" stroke-linecap="round"/>`;
+            content += `<line x1="184" y1="120" x2="188" y2="198" stroke="#475569" stroke-width="4"/>`;
+            content += `<line x1="132" y1="158" x2="128" y2="198" stroke="#475569" stroke-width="4"/>`;
+            const hipX = 122, hipY = 140, shX = 184, shY = 98;
+            content += drawLimb(hipX, hipY, 84, 192, 9, '#94a3b8');
+            content += drawLimb(hipX, hipY, shX, shY, 12, '#e2e8f0');
+            content += `<circle cx="200" cy="86" r="10" fill="#cbd5e1"/>`;
+            const hx = lerp(186, 152, p), hy = lerp(158, 120, p);
+            const arm = solveIK(shX, shY, hx, hy, 32, 32, -1);
+            content += drawGlow(156, 114, 18);
+            content += drawLimb(shX, shY, arm.jx, arm.jy, 7.5, '#cbd5e1');
+            content += drawLimb(arm.jx, arm.jy, hx, hy, 7, '#f1f5f9');
+            content += drawDumbbell(hx, hy, 0, 0.85);
+          }
+        } else if (v === 1) {
+          // FRONTAL
+          const yPull = lerp(164, 118, p);
+          content += `<rect x="136" y="76" width="48" height="58" rx="12" fill="#e2e8f0"/>`;
+          content += `<circle cx="160" cy="60" r="11" fill="#cbd5e1"/>`;
+          if (isOne) {
+            content += drawLimb(136, 86, 134, 160, 7, '#64748b');
+            content += drawLimb(184, 86, 192, yPull, 7.5, '#f1f5f9');
+            content += drawDumbbell(192, yPull, 90, 0.85);
+          } else {
+            content += drawLimb(136, 86, 124, yPull, 7.5, '#f1f5f9');
+            content += drawLimb(184, 86, 196, yPull, 7.5, '#f1f5f9');
+            content += drawDumbbell(124, yPull, 90, 0.85);
+            content += drawDumbbell(196, yPull, 90, 0.85);
+          }
+          if (g) content += `<text x="98" y="192" fill="#10b981" font-size="9.5" font-weight="700">Codos pegados al torso</text>`;
+        } else {
+          // SUPERIOR (Retracción escapular)
+          const pullBack = lerp(10, 34, p);
+          content += `<rect x="134" y="64" width="52" height="96" rx="14" fill="#cbd5e1"/>`;
+          content += `<circle cx="160" cy="52" r="11" fill="#94a3b8"/>`;
+          content += drawGlow(148, 96, 15);
+          content += drawGlow(172, 96, 15);
+          if (isOne) {
+            content += drawLimb(186, 86, 202, 86 + pullBack, 8, '#f1f5f9');
+            content += drawDumbbell(202, 86 + pullBack, 90, 0.85);
+          } else {
+            content += drawLimb(134, 86, 118, 86 + pullBack, 8, '#f1f5f9');
+            content += drawLimb(186, 86, 202, 86 + pullBack, 8, '#f1f5f9');
+            content += drawDumbbell(118, 86 + pullBack, 90, 0.85);
+            content += drawDumbbell(202, 86 + pullBack, 90, 0.85);
+          }
+          if (g) content += `<text x="98" y="192" fill="#38bdf8" font-size="9.5" font-weight="700">Jala hacia la cadera</text>`;
+        }
+      }
+
+      // =====================================================================
+      // 6. APERTURAS (INCLINADAS / BANDA)
+      // =====================================================================
+      else if (arch === 'incline_fly' || arch === 'band_fly') {
+        const openAngle = lerp(12, 74, 1 - p) * Math.PI / 180;
+        if (v === 2 || v === 1) {
+          // FRONTAL o SUPERIOR (arco en abrazo)
+          const cy = 128;
+          const lx = 138 - Math.sin(openAngle) * 54, ly = cy - Math.cos(openAngle) * 54;
+          const rx = 182 + Math.sin(openAngle) * 54, ry = cy - Math.cos(openAngle) * 54;
+          content += `<ellipse cx="160" cy="${cy}" rx="28" ry="16" fill="#e2e8f0"/>`;
+          content += `<circle cx="160" cy="${cy - 18}" r="10" fill="#cbd5e1"/>`;
+          content += drawGlow(148, cy - 4, 15);
+          content += drawGlow(172, cy - 4, 15);
+          content += `<path d="M 138 ${cy} Q ${lx - 8} ${ly + 18} ${lx} ${ly}" fill="none" stroke="#f1f5f9" stroke-width="7.5" stroke-linecap="round"/>`;
+          content += `<path d="M 182 ${cy} Q ${rx + 8} ${ry + 18} ${rx} ${ry}" fill="none" stroke="#f1f5f9" stroke-width="7.5" stroke-linecap="round"/>`;
+          if (arch === 'band_fly') {
+            content += `<path d="M ${lx} ${ly} Q 160 ${cy + 36} ${rx} ${ry}" fill="none" stroke="#f59e0b" stroke-width="3"/>`;
+          } else {
+            content += drawDumbbell(lx, ly, 20, 0.8);
+            content += drawDumbbell(rx, ry, -20, 0.8);
+          }
+          if (g) content += `<text x="96" y="196" fill="#10b981" font-size="9.5" font-weight="700">Codos semiflexionados fijos</text>`;
+        } else {
+          // LATERAL
+          content += `<line x1="20" y1="198" x2="300" y2="198" stroke="#334155" stroke-width="2"/>`;
+          if (arch === 'band_fly') {
+            content += drawLimb(132, 82, 132, 142, 12, '#e2e8f0');
+            content += drawLimb(132, 142, 156, 194, 9, '#94a3b8');
+            content += drawLimb(132, 142, 114, 194, 8, '#64748b');
+            content += `<circle cx="136" cy="64" r="10.5" fill="#cbd5e1"/>`;
+            const hx = lerp(142, 192, p);
+            content += `<line x1="74" y1="84" x2="${hx}" y2="88" stroke="#f59e0b" stroke-width="3.5"/>`;
+            content += drawLimb(132, 84, hx, 88, 7.5, '#f1f5f9');
+          } else {
+            content += `<line x1="146" y1="152" x2="80" y2="114" stroke="#475569" stroke-width="10" stroke-linecap="round"/>`;
+            content += drawLimb(156, 142, 104, 112, 12, '#e2e8f0');
+            content += `<circle cx="88" cy="100" r="10" fill="#cbd5e1"/>`;
+            const hy = lerp(124, 60, p);
+            content += drawLimb(104, 112, 120, hy, 7.5, '#f1f5f9');
+            content += drawDumbbell(120, hy, 0, 0.85);
+          }
+        }
+      }
+
+      // =====================================================================
+      // 7. BÍCEPS Y TRÍCEPS (CURL INCLINADO / MARTILLO / FRANCÉS / BANDA)
+      // =====================================================================
+      else if (arch === 'incline_curl' || arch === 'hammer_curl' || arch === 'french_press' || arch === 'band_tricep') {
+        if (v === 0) {
+          // LATERAL
+          content += `<line x1="20" y1="198" x2="300" y2="198" stroke="#334155" stroke-width="2"/>`;
+          if (arch === 'incline_curl') {
+            content += `<line x1="146" y1="152" x2="96" y2="100" stroke="#475569" stroke-width="10" stroke-linecap="round"/>`;
+            content += drawLimb(152, 144, 108, 100, 12, '#e2e8f0');
+            content += drawLimb(152, 144, 198, 152, 9, '#94a3b8');
+            content += drawLimb(198, 152, 202, 194, 8, '#94a3b8');
+            content += `<circle cx="96" cy="86" r="10" fill="#cbd5e1"/>`;
+            const elX = 104, elY = 134;
+            const ang = lerp(85, -45, p) * Math.PI / 180;
+            const hx = elX + Math.cos(ang) * 34, hy = elY + Math.sin(ang) * 34;
+            content += drawGlow(106, 118, 15);
+            content += drawLimb(108, 100, elX, elY, 7.5, '#cbd5e1');
+            content += drawLimb(elX, elY, hx, hy, 7, '#f1f5f9');
+            content += drawDumbbell(hx, hy, 0, 0.8);
+          } else if (arch === 'hammer_curl') {
+            const shX = 152, shY = 76, elX = 152, elY = 114;
+            content += drawLimb(shX, shY, 150, 140, 12, '#e2e8f0');
+            content += drawLimb(150, 140, 152, 196, 9, '#94a3b8');
+            content += `<circle cx="154" cy="58" r="10.5" fill="#cbd5e1"/>`;
+            const ang = lerp(86, -55, p) * Math.PI / 180;
+            const hx = elX + Math.cos(ang) * 34, hy = elY + Math.sin(ang) * 34;
+            content += drawGlow(152, 96, 15);
+            content += drawLimb(shX, shY, elX, elY, 7.5, '#cbd5e1');
+            content += drawLimb(elX, elY, hx, hy, 7, '#f1f5f9');
+            content += drawDumbbell(hx, hy, 90, 0.8);
+          } else if (arch === 'french_press') {
+            content += `<rect x="74" y="146" width="146" height="12" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>`;
+            content += drawLimb(114, 136, 186, 138, 12, '#e2e8f0');
+            content += drawLimb(186, 138, 224, 150, 9, '#94a3b8');
+            content += drawLimb(224, 150, 228, 194, 8, '#94a3b8');
+            content += `<circle cx="94" cy="134" r="10" fill="#cbd5e1"/>`;
+            const elX = 104, elY = 98;
+            const ang = lerp(-155, -78, p) * Math.PI / 180;
+            const hx = elX + Math.cos(ang) * 34, hy = elY + Math.sin(ang) * 34;
+            content += drawGlow(108, 114, 15);
+            content += drawLimb(114, 136, elX, elY, 7.5, '#cbd5e1');
+            content += drawLimb(elX, elY, hx, hy, 7, '#f1f5f9');
+            content += drawDumbbell(hx, hy, 0, 0.8);
+          } else {
+            // Extensión de tríceps con banda en barra
+            content += `<circle cx="188" cy="30" r="5" fill="#38bdf8"/>`;
+            const shX = 148, shY = 78, elX = 154, elY = 116;
+            content += drawLimb(shX, shY, 144, 142, 12, '#e2e8f0');
+            content += drawLimb(144, 142, 146, 196, 9, '#94a3b8');
+            content += `<circle cx="152" cy="60" r="10.5" fill="#cbd5e1"/>`;
+            const ang = lerp(-20, 82, p) * Math.PI / 180;
+            const hx = elX + Math.cos(ang) * 34, hy = elY + Math.sin(ang) * 34;
+            content += `<line x1="188" y1="30" x2="${hx}" y2="${hy}" stroke="#f59e0b" stroke-width="3.5"/>`;
+            content += drawGlow(150, 98, 15);
+            content += drawLimb(shX, shY, elX, elY, 7.5, '#cbd5e1');
+            content += drawLimb(elX, elY, hx, hy, 7, '#f1f5f9');
+          }
+        } else {
+          // FRONTAL (v=1) o SUPERIOR/POSTERIOR (v=2): Codos estables sin abrirse
+          const yMove = (arch === 'band_tricep') ? lerp(98, 146, p) : lerp(144, 88, p);
+          content += `<rect x="140" y="76" width="40" height="62" rx="12" fill="#e2e8f0"/>`;
+          content += `<circle cx="160" cy="60" r="11" fill="#cbd5e1"/>`;
+          content += drawLimb(136, 82, 134, 114, 7.5, '#cbd5e1');
+          content += drawLimb(184, 82, 186, 114, 7.5, '#cbd5e1');
+          content += drawLimb(134, 114, 132, yMove, 7, '#f1f5f9');
+          content += drawLimb(186, 114, 188, yMove, 7, '#f1f5f9');
+          if (arch === 'band_tricep') {
+            content += `<line x1="160" y1="26" x2="132" y2="${yMove}" stroke="#f59e0b" stroke-width="3"/>`;
+            content += `<line x1="160" y1="26" x2="188" y2="${yMove}" stroke="#f59e0b" stroke-width="3"/>`;
+          } else {
+            const rot = arch === 'hammer_curl' ? 90 : 0;
+            content += drawDumbbell(132, yMove, rot, 0.78);
+            content += drawDumbbell(188, yMove, rot, 0.78);
+          }
+          if (g) content += `<text x="102" y="190" fill="#10b981" font-size="9.5" font-weight="700">Codos fijos y paralelos</text>`;
+        }
+      }
+
+      // =====================================================================
+      // 8. PIERNA: PESO MUERTO RUMANO / SENTADILLA GOBLET / HIP THRUST
+      // =====================================================================
+      else if (arch === 'rdl' || arch === 'goblet_squat' || arch === 'hip_thrust') {
+        const floorY = 198;
+        if (arch === 'rdl') {
+          if (v === 0) {
+            content += `<line x1="20" y1="${floorY}" x2="300" y2="${floorY}" stroke="#334155" stroke-width="2"/>`;
+            const ankle = { x: 162, y: 190 };
+            const hx = lerp(156, 116, p), hy = lerp(108, 120, p);
+            const torsoAng = lerp(-86, -12, p) * Math.PI / 180;
+            const shX = hx + Math.cos(torsoAng) * 52, shY = hy + Math.sin(torsoAng) * 52;
+            const leg = solveIK(hx, hy, ankle.x, ankle.y, 44, 44, -1);
+            content += drawGlow((hx + leg.jx) / 2 - 4, (hy + leg.jy) / 2, 20);
+            content += drawLimb(hx, hy, leg.jx, leg.jy, 10, '#cbd5e1');
+            content += drawLimb(leg.jx, leg.jy, ankle.x, ankle.y, 9, '#94a3b8');
+            content += `<rect x="${ankle.x - 6}" y="${floorY - 6}" width="24" height="6" rx="3" fill="#e2e8f0"/>`;
+            content += drawLimb(hx, hy, shX, shY, 12, '#e2e8f0');
+            content += `<circle cx="${shX + Math.cos(torsoAng) * 14}" cy="${shY + Math.sin(torsoAng) * 14}" r="10" fill="#cbd5e1"/>`;
+            const handX = shX - 2, handY = shY + 46;
+            content += drawLimb(shX, shY, handX, handY, 7, '#f1f5f9');
+            content += drawDumbbell(handX, handY + 2, 0, 0.9);
+            if (g) content += `<text x="64" y="96" fill="#10b981" font-size="9" font-weight="700">Cadera atrás • Espalda neutra</text>`;
+          } else {
+            const dbY = lerp(124, 166, p);
+            content += `<line x1="30" y1="${floorY}" x2="290" y2="${floorY}" stroke="#334155" stroke-width="2"/>`;
+            content += drawLimb(148, 114, 148, 194, 9.5, '#cbd5e1');
+            content += drawLimb(172, 114, 172, 194, 9.5, '#cbd5e1');
+            content += `<rect x="140" y="${lerp(66, 94, p)}" width="40" height="48" rx="12" fill="#e2e8f0"/>`;
+            content += `<circle cx="160" cy="${lerp(52, 80, p)}" r="10.5" fill="#cbd5e1"/>`;
+            content += drawDumbbell(142, dbY, 0, 0.85);
+            content += drawDumbbell(178, dbY, 0, 0.85);
+            if (g) content += `<text x="90" y="34" fill="#38bdf8" font-size="9.5" font-weight="700">Mancuernas pegadas a muslos</text>`;
+          }
+        } else if (arch === 'goblet_squat') {
+          if (v === 0) {
+            content += `<line x1="20" y1="${floorY}" x2="300" y2="${floorY}" stroke="#334155" stroke-width="2"/>`;
+            // Cuña bajo talones
+            content += `<polygon points="150,198 168,198 150,191" fill="#38bdf8"/>`;
+            const ankle = { x: 164, y: 188 };
+            const hx = lerp(158, 134, p), hy = lerp(108, 156, p);
+            const shX = hx + lerp(4, 16, p), shY = hy - 48;
+            const leg = solveIK(hx, hy, ankle.x, ankle.y, 44, 44, -1);
+            content += drawGlow((hx + leg.jx) / 2, (hy + leg.jy) / 2, 20);
+            content += drawLimb(hx, hy, leg.jx, leg.jy, 10, '#e2e8f0');
+            content += drawLimb(leg.jx, leg.jy, ankle.x, ankle.y, 9, '#cbd5e1');
+            content += drawLimb(hx, hy, shX, shY, 12, '#f1f5f9');
+            content += `<circle cx="${shX + 3}" cy="${shY - 14}" r="10.5" fill="#cbd5e1"/>`;
+            content += drawLimb(shX, shY + 6, shX + 18, shY + 20, 7, '#cbd5e1');
+            content += drawDumbbell(shX + 20, shY + 20, 90, 0.85);
+            if (g) content += `<text x="58" y="186" fill="#38bdf8" font-size="9" font-weight="700">Talones elevados</text>`;
+          } else {
+            const drop = lerp(0, 44, p);
+            const kneeOut = lerp(0, 14, p);
+            content += `<line x1="30" y1="${floorY}" x2="290" y2="${floorY}" stroke="#334155" stroke-width="2"/>`;
+            content += drawLimb(146, 114 + drop, 142 - kneeOut, 152 + drop * 0.35, 10, '#e2e8f0');
+            content += drawLimb(142 - kneeOut, 152 + drop * 0.35, 144, 194, 9, '#cbd5e1');
+            content += drawLimb(174, 114 + drop, 178 + kneeOut, 152 + drop * 0.35, 10, '#e2e8f0');
+            content += drawLimb(178 + kneeOut, 152 + drop * 0.35, 176, 194, 9, '#cbd5e1');
+            content += `<rect x="140" y="${64 + drop}" width="40" height="52" rx="12" fill="#e2e8f0"/>`;
+            content += `<circle cx="160" cy="${50 + drop}" r="10.5" fill="#cbd5e1"/>`;
+            content += drawDumbbell(160, 84 + drop, 90, 0.85);
+            if (g) content += `<text x="98" y="28" fill="#10b981" font-size="9.5" font-weight="700">Rodillas hacia afuera</text>`;
+          }
+        } else {
+          // HIP THRUST EN BANCO
+          if (v === 0) {
+            content += `<line x1="20" y1="${floorY}" x2="300" y2="${floorY}" stroke="#334155" stroke-width="2"/>`;
+            content += `<rect x="46" y="138" width="66" height="60" rx="6" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>`;
+            const shX = 114, shY = 138;
+            const hx = lerp(152, 164, p), hy = lerp(176, 138, p);
+            const kneeX = 216, kneeY = lerp(146, 138, p);
+            content += drawGlow(hx, hy, 22);
+            content += drawLimb(shX, shY, hx, hy, 12, '#e2e8f0');
+            content += drawLimb(hx, hy, kneeX, kneeY, 10, '#cbd5e1');
+            content += drawLimb(kneeX, kneeY, 218, 194, 9, '#94a3b8');
+            content += `<circle cx="102" cy="122" r="10" fill="#cbd5e1"/>`;
+            content += drawDumbbell(hx + 2, hy - 8, 0, 0.9);
+            if (g) {
+              content += `<line x1="114" y1="138" x2="220" y2="138" stroke="#10b981" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+              content += `<text x="150" y="114" fill="#10b981" font-size="9" font-weight="700">Espinilla vertical arriba</text>`;
+            }
+          } else {
+            const lift = lerp(0, 26, p);
+            content += `<rect x="96" y="136" width="128" height="16" rx="5" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>`;
+            content += drawGlow(160, 128 - lift, 24);
+            content += `<rect x="134" y="${116 - lift}" width="52" height="24" rx="10" fill="#e2e8f0"/>`;
+            content += drawLimb(144, 136 - lift, 144, 194, 9.5, '#cbd5e1');
+            content += drawLimb(176, 136 - lift, 176, 194, 9.5, '#cbd5e1');
+            content += drawDumbbell(160, 112 - lift, 0, 0.95);
+            if (g) content += `<text x="104" y="42" fill="#10b981" font-size="9.5" font-weight="700">Rodillas firmes sin cerrarse</text>`;
+          }
+        }
+      }
+
+      svg.innerHTML = content;
+    }
+
     function closeModal() {
+      stopTechniqueAnim();
       document.getElementById('modal-backdrop').classList.add('hidden');
     }
 
