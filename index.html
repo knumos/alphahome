@@ -255,6 +255,12 @@
           name: 'Día 1 — Torso A',
           focus: 'Pecho, Espalda y Hombro Posterior (Fuerza)',
           recommendedDay: 'Lunes',
+          warmup: [
+            { id: 'w1_1', name: 'Dislocaciones / Pases con banda', target: '2 × 10-12', tip: 'Brazos estirados, abre el agarre para rotar hombros sin molestia.', timerSec: 45 },
+            { id: 'w1_2', name: 'Band Pull-Aparts + Rotación externa', target: '2 × 12-15', tip: 'Activa manguito rotador y estabiliza el hombro antes del Press Inclinado.', timerSec: 45 },
+            { id: 'w1_3', name: 'Bombeo de codos con banda (curl + extensión)', target: '2 × 15', tip: 'Tensión ligera y continua para lubricar tendones de bíceps y tríceps.', timerSec: 45 },
+            { id: 'w1_4', name: 'Colgadas escapulares en barra', target: '2 × 8-10', tip: 'Codos bloqueados, deprime y retrae escápulas para preparar las dominadas.', timerSec: 30 }
+          ],
           exercises: [
             {
               id: 'd1_e1',
@@ -298,6 +304,12 @@
           name: 'Día 2 — Extremidades A',
           focus: 'Hombro, Brazos y Cuádriceps',
           recommendedDay: 'Martes',
+          warmup: [
+            { id: 'w2_1', name: 'Rotación externa con banda + círculos de hombro', target: '2 × 12', tip: 'Calienta deltoides antes de abrir con Elevaciones Laterales.', timerSec: 45 },
+            { id: 'w2_2', name: 'Bombeo de codos con banda (extensión + curl suave)', target: '2 × 15', tip: 'Prepara los codos para la superserie de bíceps y tríceps sin dolor.', timerSec: 45 },
+            { id: 'w2_3', name: 'Movilidad de tobillo y cadera (zancada con rotación)', target: '2 × 8 / lado', tip: 'Mejora profundidad y estabilidad para Búlgara y Goblet.', timerSec: 60 },
+            { id: 'w2_4', name: 'Sentadilla al aire con pausa abajo', target: '2 × 10', tip: 'Pausa de 2s abajo para lubricar rodillas y activar cuádriceps.', timerSec: 45 }
+          ],
           exercises: [
             {
               id: 'd2_e1',
@@ -341,6 +353,12 @@
           name: 'Día 3 — Torso B',
           focus: 'Pecho, Espalda y Hombro Posterior (Hipertrofia)',
           recommendedDay: 'Jueves',
+          warmup: [
+            { id: 'w3_1', name: 'Círculos escapulares + retracciones con banda', target: '2 × 12', tip: 'Despierta espalda media y hombros antes de empujar y jalar.', timerSec: 45 },
+            { id: 'w3_2', name: 'Rotación externa a 90° con banda (posición L)', target: '2 × 12 / lado', tip: 'Protege el manguito rotador y la cápsula anterior para el Press Plano.', timerSec: 45 },
+            { id: 'w3_3', name: 'Bombeo de codos con banda (curl + extensión)', target: '2 × 15', tip: 'Clave antes de las Dominadas Supinas para proteger tendón de bíceps y codo.', timerSec: 45 },
+            { id: 'w3_4', name: 'Movilidad de muñecas + 1 serie ligera de aproximación', target: '1 min', tip: 'Círculos y apoyos suaves de muñeca + 10 reps ligeras de Press Plano.', timerSec: 60 }
+          ],
           exercises: [
             {
               id: 'd3_e1',
@@ -384,6 +402,12 @@
           name: 'Día 4 — Extremidades B',
           focus: 'Hombro, Brazos y Cadena Posterior',
           recommendedDay: 'Viernes',
+          warmup: [
+            { id: 'w4_1', name: 'Dislocaciones con banda + Wall Slides', target: '2 × 10', tip: 'Abre el rango de movimiento vertical antes del Press Militar Sentado.', timerSec: 45 },
+            { id: 'w4_2', name: 'Rotación externa + extensiones ligeras de tríceps con banda', target: '2 × 15', tip: 'Indispensable para lubricar codos antes del Press Francés con mancuernas.', timerSec: 45 },
+            { id: 'w4_3', name: 'Bisagra de cadera con banda (Good Mornings)', target: '2 × 12', tip: 'Activa isquiotibiales y espalda baja para el Peso Muerto Rumano.', timerSec: 45 },
+            { id: 'w4_4', name: 'Puentes de glúteo en suelo', target: '2 × 12', tip: 'Despierta glúteos sin fatiga antes de pasar a la carga en banco.', timerSec: 45 }
+          ],
           exercises: [
             {
               id: 'd4_e1',
@@ -502,8 +526,16 @@
             }
           : def.bodyMetrics;
 
+        const mergedRoutines = (Array.isArray(parsed.routines) && parsed.routines.length ? parsed.routines : def.routines).map(r => {
+          const defMatch = def.routines.find(d => d.id === r.id);
+          return {
+            ...r,
+            warmup: Array.isArray(r.warmup) && r.warmup.length ? r.warmup : (defMatch ? defMatch.warmup : [])
+          };
+        });
+
         return {
-          routines: Array.isArray(parsed.routines) && parsed.routines.length ? parsed.routines : def.routines,
+          routines: mergedRoutines,
           activeWorkout: parsed.activeWorkout || null,
           history: Array.isArray(parsed.history) ? parsed.history : [],
           bodyMetrics: loadedBodyMetrics,
@@ -970,6 +1002,8 @@
         };
       });
 
+      const warmupItems = (routine.warmup || []).map(w => ({ ...w, done: false }));
+
       state.activeWorkout = {
         dayId: routine.id,
         dayName: routine.name,
@@ -978,6 +1012,8 @@
         accumulatedSec: 0,
         lastResumeAt: Date.now(),
         paused: false,
+        warmupCollapsed: false,
+        warmup: warmupItems,
         exercises
       };
 
@@ -1172,6 +1208,35 @@
     // -------------------------------------------------------------------------
     // 8. ACCIONES SOBRE SERIES Y EJERCICIOS EN VIVO
     // -------------------------------------------------------------------------
+    function toggleWarmupItem(wIdx) {
+      if (!state.activeWorkout || !Array.isArray(state.activeWorkout.warmup)) return;
+      const item = state.activeWorkout.warmup[wIdx];
+      if (!item) return;
+      item.done = !item.done;
+      const allDone = state.activeWorkout.warmup.every(w => w.done);
+      if (allDone) {
+        showToast('¡Calentamiento completado! Listo para las series efectivas.', 'success');
+      }
+      saveState();
+      render();
+    }
+
+    function completeAllWarmup() {
+      if (!state.activeWorkout || !Array.isArray(state.activeWorkout.warmup)) return;
+      state.activeWorkout.warmup.forEach(w => { w.done = true; });
+      state.activeWorkout.warmupCollapsed = true;
+      saveState();
+      showToast('Calentamiento marcado como listo.', 'success');
+      render();
+    }
+
+    function toggleWarmupCollapse() {
+      if (!state.activeWorkout) return;
+      state.activeWorkout.warmupCollapsed = !state.activeWorkout.warmupCollapsed;
+      saveState();
+      render();
+    }
+
     function updateSetField(exIdx, setIdx, field, value) {
       if (!state.activeWorkout) return;
       const ex = state.activeWorkout.exercises[exIdx];
@@ -1583,6 +1648,19 @@
           </div>
           <button onclick="closeModal()" class="p-2 rounded-xl bg-surface-800 text-slate-400">✕</button>
         </div>
+        ${Array.isArray(day.warmup) && day.warmup.length ? `
+          <div class="mb-4 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/25">
+            <p class="text-[11px] font-extrabold uppercase tracking-wider text-amber-300 mb-2">🔥 Calentamiento del día (5–7 min)</p>
+            <ul class="space-y-1.5">
+              ${day.warmup.map(w => `
+                <li class="text-xs text-slate-200 flex items-start justify-between gap-2">
+                  <span>• ${escapeHtml(w.name)}</span>
+                  <span class="text-[11px] font-bold text-amber-200 shrink-0">${escapeHtml(w.target)}</span>
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+        ` : ''}
         <div class="divide-y divide-slate-800/80 mb-4">
           ${day.exercises.map((ex, idx) => `
             <div class="py-3 flex items-center justify-between gap-2">
@@ -1711,6 +1789,81 @@
       const aw = state.activeWorkout;
       const currentBW = getCurrentBodyWeight();
 
+      // Asegurar calentamiento si la sesión activa se inició antes de esta actualización
+      if (!Array.isArray(aw.warmup)) {
+        const matchedRoutine = state.routines.find(r => r.id === aw.dayId);
+        aw.warmup = matchedRoutine && Array.isArray(matchedRoutine.warmup)
+          ? matchedRoutine.warmup.map(w => ({ ...w, done: false }))
+          : [];
+      }
+      const warmupTotal = aw.warmup.length;
+      const warmupDone = aw.warmup.filter(w => w.done).length;
+      const allWarmupDone = warmupTotal > 0 && warmupDone === warmupTotal;
+
+      const warmupCardHtml = warmupTotal > 0 ? `
+        <section class="rounded-3xl bg-surface-900 border ${allWarmupDone ? 'border-emerald-500/40' : 'border-amber-500/35'} overflow-hidden shadow-lg">
+          <div onclick="toggleWarmupCollapse()" class="p-4 cursor-pointer flex items-center justify-between gap-3 ${allWarmupDone ? 'bg-emerald-500/10' : 'bg-amber-500/10'}">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-extrabold ${allWarmupDone ? 'text-emerald-300' : 'text-amber-300'}">
+                  ${allWarmupDone ? '✓ Calentamiento completado' : '🔥 Calentamiento del Día (5–7 min)'}
+                </span>
+                <span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold tabular-nums ${allWarmupDone ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-200'}">
+                  ${warmupDone}/${warmupTotal}
+                </span>
+              </div>
+              <p class="text-[11px] text-slate-300 mt-0.5">Hombros, codos y articulaciones clave antes de cargar peso</p>
+            </div>
+            <span class="text-xs font-bold text-slate-300 shrink-0">${aw.warmupCollapsed ? 'Mostrar ▼' : 'Ocultar ▲'}</span>
+          </div>
+
+          ${!aw.warmupCollapsed ? `
+            <div class="p-3 space-y-2 border-t border-slate-800/80">
+              ${aw.warmup.map((w, wIdx) => `
+                <div class="p-3 rounded-2xl border transition flex items-start justify-between gap-2.5 ${
+                  w.done
+                    ? 'bg-emerald-500/10 border-emerald-500/30'
+                    : 'bg-surface-950/60 border-slate-800/80'
+                }">
+                  <button
+                    onclick="toggleWarmupItem(${wIdx})"
+                    aria-label="Completar calentamiento"
+                    class="w-7 h-7 mt-0.5 rounded-xl shrink-0 flex items-center justify-center font-extrabold text-xs transition active:scale-90 ${
+                      w.done
+                        ? 'bg-emerald-500 text-slate-950'
+                        : 'bg-surface-800 text-slate-400 border border-slate-700'
+                    }"
+                  >
+                    ✓
+                  </button>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                      <p class="text-xs font-bold ${w.done ? 'text-slate-400 line-through' : 'text-white'}">${escapeHtml(w.name)}</p>
+                      <span class="px-1.5 py-0.5 rounded bg-surface-800 text-[10px] font-bold text-amber-300">${escapeHtml(w.target)}</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-0.5 leading-snug">${escapeHtml(w.tip)}</p>
+                  </div>
+                  <button
+                    onclick="startRestTimer(${w.timerSec || 45}, 'Calentamiento: ${escapeJs(w.name)}')"
+                    class="shrink-0 px-2 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-[10px] font-bold text-cyan-300"
+                  >
+                    ⏱ ${w.timerSec || 45}s
+                  </button>
+                </div>
+              `).join('')}
+
+              ${!allWarmupDone ? `
+                <div class="pt-1 flex justify-end">
+                  <button onclick="completeAllWarmup()" class="px-3 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-[11px] font-bold text-emerald-300">
+                    ✓ Marcar todo listo y ocultar
+                  </button>
+                </div>
+              ` : ''}
+            </div>
+          ` : ''}
+        </section>
+      ` : '';
+
       return `
         <div class="space-y-4">
           <!-- Aviso rápido de modo -->
@@ -1720,6 +1873,9 @@
               <button onclick="toggleReadaptationMode()" class="text-[11px] font-bold text-amber-200 underline">Desactivar</button>
             </div>
           ` : ''}
+
+          <!-- Bloque de Calentamiento Específico del Día -->
+          ${warmupCardHtml}
 
           ${aw.exercises.map((ex, exIdx) => {
             const rec = calculateRecommendation(ex);
@@ -2634,7 +2790,15 @@
           if (!parsed || !Array.isArray(parsed.routines)) {
             throw new Error('Formato inválido');
           }
-          state = { ...getDefaultState(), ...parsed };
+          const defState = getDefaultState();
+          const importedRoutines = (Array.isArray(parsed.routines) ? parsed.routines : defState.routines).map(r => {
+            const defMatch = defState.routines.find(d => d.id === r.id);
+            return {
+              ...r,
+              warmup: Array.isArray(r.warmup) && r.warmup.length ? r.warmup : (defMatch ? defMatch.warmup : [])
+            };
+          });
+          state = { ...defState, ...parsed, routines: importedRoutines };
           saveState();
           showToast('Respaldo importado correctamente.', 'success');
           render();
