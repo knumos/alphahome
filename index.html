@@ -13,8 +13,9 @@
 
   <!-- Favicon SVG personalizado de AlphaHome -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%2306b6d4'/%3E%3Cstop offset='100%25' stop-color='%232563eb'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='512' height='512' rx='112' fill='%23070b14'/%3E%3Crect x='24' y='24' width='464' height='464' rx='96' fill='url(%23bg)'/%3E%3Cpath d='M276 96L136 278h104l-14 138 150-192H272l4-128z' fill='%23ffffff'/%3E%3C/svg%3E" />
-  <link id="apple-touch-icon-link" rel="apple-touch-icon" sizes="180x180" href="" />
-  <link id="pwa-manifest-link" rel="manifest" href="" />
+  <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png" />
+  <link rel="manifest" href="./manifest.webmanifest" />
 
   <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -139,8 +140,9 @@
 
     <!-- Barra de progreso de sesión (Meta 60 min) visible solo en entrenamiento activo -->
     <div id="session-progress-bar-wrap" class="hidden max-w-2xl mx-auto px-4 pb-2">
-      <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+      <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1 gap-2">
         <span id="session-timer-label" class="font-semibold text-cyan-300 tabular-nums">00:00 / 60:00</span>
+        <span id="wake-lock-indicator" class="hidden font-semibold text-emerald-300 whitespace-nowrap">Pantalla encendida</span>
         <span id="session-sets-progress" class="font-medium text-slate-400">0 / 0 series</span>
       </div>
       <div class="w-full h-1.5 bg-surface-800 rounded-full overflow-hidden">
@@ -1022,6 +1024,7 @@
       startSessionTicker();
       showToast(`Sesión iniciada: ${routine.name}`, 'success');
       render();
+      syncWakeLock();
     }
 
     function getSessionElapsedSeconds() {
@@ -1045,7 +1048,112 @@
       }
       saveState();
       renderHeader();
+      syncWakeLock();
     }
+
+    // -------------------------------------------------------------------------
+    // 5B. WAKE LOCK — pantalla encendida solo durante la sesión activa
+    // La preferencia vive en su propia clave para no modificar alphahome_state_v1.
+    // -------------------------------------------------------------------------
+    const WAKE_LOCK_PREF_KEY = 'alphahome_screen_wake_lock';
+    let wakeLockSentinel = null;
+    let wakeLockRequest = null;
+    let wakeLockActive = false;
+
+    function wakeLockSupported() {
+      try {
+        return !!(navigator.wakeLock && typeof navigator.wakeLock.request === 'function');
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function isWakeLockPreferred() {
+      try {
+        const value = localStorage.getItem(WAKE_LOCK_PREF_KEY);
+        if (value === null) return true;
+        return value === '1';
+      } catch (e) {
+        return true;
+      }
+    }
+
+    function workoutWantsWakeLock() {
+      const aw = state.activeWorkout;
+      return !!(aw && !aw.paused && isWakeLockPreferred());
+    }
+
+    function updateWakeLockIndicator() {
+      const el = document.getElementById('wake-lock-indicator');
+      if (!el) return;
+      const show = wakeLockActive && workoutWantsWakeLock();
+      el.classList.toggle('hidden', !show);
+    }
+
+    async function acquireWakeLock() {
+      if (!wakeLockSupported() || !workoutWantsWakeLock()) return;
+      if (document.visibilityState !== 'visible') return;
+      if (wakeLockSentinel) return;
+      if (wakeLockRequest) return wakeLockRequest;
+
+      wakeLockRequest = (async () => {
+        try {
+          const sentinel = await navigator.wakeLock.request('screen');
+          if (!workoutWantsWakeLock() || document.visibilityState !== 'visible') {
+            try { await sentinel.release(); } catch (e) {}
+            wakeLockActive = false;
+            return;
+          }
+          wakeLockSentinel = sentinel;
+          wakeLockActive = true;
+          const onRelease = () => {
+            if (wakeLockSentinel === sentinel) {
+              wakeLockSentinel = null;
+              wakeLockActive = false;
+              updateWakeLockIndicator();
+            }
+          };
+          try { sentinel.addEventListener('release', onRelease); } catch (e) {}
+        } catch (e) {
+          wakeLockSentinel = null;
+          wakeLockActive = false;
+        } finally {
+          wakeLockRequest = null;
+          updateWakeLockIndicator();
+        }
+      })();
+
+      return wakeLockRequest;
+    }
+
+    async function releaseWakeLock() {
+      const sentinel = wakeLockSentinel;
+      wakeLockSentinel = null;
+      wakeLockActive = false;
+      updateWakeLockIndicator();
+      if (!sentinel) return;
+      try { await sentinel.release(); } catch (e) {}
+    }
+
+    function syncWakeLock() {
+      if (workoutWantsWakeLock() && document.visibilityState === 'visible') {
+        acquireWakeLock().catch(() => {});
+      } else {
+        releaseWakeLock().catch(() => {});
+      }
+    }
+
+    function toggleWakeLockPref() {
+      try {
+        localStorage.setItem(WAKE_LOCK_PREF_KEY, isWakeLockPreferred() ? '0' : '1');
+      } catch (e) {}
+      syncWakeLock();
+      render();
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') syncWakeLock();
+    });
 
     function startSessionTicker() {
       if (sessionTickerId) clearInterval(sessionTickerId);
@@ -1082,6 +1190,7 @@
         const doneSets = aw.exercises.reduce((sum, ex) => sum + ex.sets.filter(s => s.done).length, 0);
         setsEl.textContent = `${doneSets} / ${totalSets} series`;
       }
+      updateWakeLockIndicator();
     }
 
     // -------------------------------------------------------------------------
@@ -1507,6 +1616,7 @@
     function discardWorkout() {
       skipRestTimer();
       state.activeWorkout = null;
+      syncWakeLock();
       saveState();
       closeModal();
       showToast('Sesión descartada.', 'info');
@@ -1541,6 +1651,7 @@
 
       skipRestTimer();
       state.activeWorkout = null;
+      syncWakeLock();
       state.ui.activeTab = 'progress';
       saveState();
       closeModal();
@@ -2699,6 +2810,17 @@
               </button>
             </div>
 
+            <div class="flex items-center justify-between gap-3 pt-3 border-t border-slate-800">
+              <div>
+                <p class="text-sm font-bold text-white">Pantalla siempre encendida</p>
+                <p class="text-xs text-slate-400">Mantiene la pantalla activa mientras entrenas. Se apaga al pausar o al terminar.</p>
+                ${wakeLockSupported() ? '' : '<p class="text-[11px] text-amber-300 mt-1">Este navegador no puede mantener la pantalla encendida.</p>'}
+              </div>
+              <button onclick="toggleWakeLockPref()" aria-pressed="${isWakeLockPreferred() ? 'true' : 'false'}" aria-label="Pantalla siempre encendida" class="w-12 h-7 rounded-full p-1 transition ${isWakeLockPreferred() ? 'bg-cyan-500' : 'bg-surface-700'} shrink-0">
+                <div class="w-5 h-5 rounded-full bg-white transition-transform ${isWakeLockPreferred() ? 'translate-x-5' : 'translate-x-0'}"></div>
+              </button>
+            </div>
+
             <div class="pt-3 border-t border-slate-800 space-y-2.5">
               <div class="flex items-center justify-between gap-3">
                 <div>
@@ -2736,26 +2858,7 @@
             </button>
           </div>
 
-          <!-- Acceso rápido a Pantalla de Inicio (App Móvil) -->
-          <div class="p-4 rounded-3xl bg-surface-900 border border-slate-800 space-y-3">
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">App en tu Teléfono</h3>
-            <div class="flex items-center gap-3">
-              <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0 border border-cyan-400/30">
-                <svg class="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/>
-                </svg>
-              </div>
-              <div class="min-w-0">
-                <p class="text-sm font-bold text-white">Ícono y Pantalla Completa listos</p>
-                <p class="text-xs text-slate-400 mt-0.5">En Chrome toca <b>⋮ → Agregar a pantalla principal</b>; en Safari toca <b>Compartir → Agregar a inicio</b>.</p>
-              </div>
-            </div>
-            ${deferredInstallPrompt ? `
-              <button onclick="triggerPwaInstall()" class="w-full py-3 rounded-2xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs shadow-lg shadow-cyan-600/20 transition">
-                📲 Instalar AlphaHome ahora
-              </button>
-            ` : ''}
-          </div>
+          ${renderInstallCard()}
         </div>
       `;
     }
@@ -2818,6 +2921,7 @@
             };
           });
           state = { ...defState, ...parsed, routines: importedRoutines };
+          syncWakeLock();
           saveState();
           showToast('Respaldo importado correctamente.', 'success');
           render();
@@ -2843,6 +2947,8 @@
     function resetAllData() {
       skipRestTimer();
       state = getDefaultState();
+      try { localStorage.removeItem(WAKE_LOCK_PREF_KEY); } catch (e) {}
+      syncWakeLock();
       saveState();
       closeModal();
       showToast('Datos reiniciados a valores iniciales.', 'info');
@@ -4134,112 +4240,176 @@
     }
 
     // -------------------------------------------------------------------------
-    // 14. INICIALIZACIÓN
+    // 14. PWA: MANIFEST ESTÁTICO, SERVICE WORKER E INSTALACIÓN
     // -------------------------------------------------------------------------
-    // 14. ÍCONO PERSONALIZADO, MANIFEST PWA E INICIALIZACIÓN
-    // -------------------------------------------------------------------------
+    let swRegistration = null;
+    let appUpdateReady = false;
+    const SW_RELOAD_FLAG = 'alphahome_sw_reload';
 
-    /**
-     * Genera el ícono PNG de alta resolución (512x512) en memoria y configura
-     * el apple-touch-icon y el manifest dinámico para abrir en pantalla completa.
-     */
-    function initAppIconAndPWA() {
+    function isRunningStandalone() {
       try {
-        const size = 512;
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        // Fondo oscuro base
-        ctx.fillStyle = '#070b14';
-        ctx.fillRect(0, 0, size, size);
-
-        // Tarjeta interna con degradado cian -> azul
-        const pad = 28;
-        const radius = 104;
-        const grad = ctx.createLinearGradient(pad, pad, size - pad, size - pad);
-        grad.addColorStop(0, '#06b6d4');
-        grad.addColorStop(1, '#2563eb');
-
-        ctx.beginPath();
-        ctx.moveTo(pad + radius, pad);
-        ctx.lineTo(size - pad - radius, pad);
-        ctx.quadraticCurveTo(size - pad, pad, size - pad, pad + radius);
-        ctx.lineTo(size - pad, size - pad - radius);
-        ctx.quadraticCurveTo(size - pad, size - pad, size - pad - radius, size - pad);
-        ctx.lineTo(pad + radius, size - pad);
-        ctx.quadraticCurveTo(pad, size - pad, pad, size - pad - radius);
-        ctx.lineTo(pad, pad + radius);
-        ctx.quadraticCurveTo(pad, pad, pad + radius, pad);
-        ctx.closePath();
-        ctx.fillStyle = grad;
-        ctx.fill();
-
-        // Rayo central blanco (emblema de AlphaHome)
-        ctx.beginPath();
-        ctx.moveTo(278, 98);
-        ctx.lineTo(138, 280);
-        ctx.lineTo(242, 280);
-        ctx.lineTo(228, 414);
-        ctx.lineTo(374, 224);
-        ctx.lineTo(272, 224);
-        ctx.closePath();
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
-
-        canvas.toBlob((blob) => {
-          if (!blob) return;
-          const iconUrl = URL.createObjectURL(blob);
-
-          const appleLink = document.getElementById('apple-touch-icon-link');
-          if (appleLink) appleLink.href = iconUrl;
-
-          const manifestObj = {
-            name: 'AlphaHome — Fuerza en Casa',
-            short_name: 'AlphaHome',
-            description: 'Entrenamiento de fuerza en casa con doble progresión, temporizadores y peso corporal.',
-            start_url: '.',
-            display: 'standalone',
-            background_color: '#070b14',
-            theme_color: '#070b14',
-            orientation: 'portrait',
-            icons: [
-              { src: iconUrl, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
-            ]
-          };
-
-          const manifestBlob = new Blob([JSON.stringify(manifestObj)], { type: 'application/manifest+json' });
-          const manifestUrl = URL.createObjectURL(manifestBlob);
-          const manifestLink = document.getElementById('pwa-manifest-link');
-          if (manifestLink) manifestLink.href = manifestUrl;
-        }, 'image/png');
-      } catch (err) {
-        console.warn('No se pudo inicializar el ícono PWA:', err);
+        return window.matchMedia('(display-mode: standalone)').matches
+          || window.matchMedia('(display-mode: fullscreen)').matches
+          || window.navigator.standalone === true;
+      } catch (e) {
+        return false;
       }
     }
 
+    function isIosDevice() {
+      try {
+        const ua = window.navigator.userAgent || '';
+        const iOS = /iPad|iPhone|iPod/.test(ua);
+        const iPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+        return iOS || iPadOS;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function renderInstallCard() {
+      const installed = isRunningStandalone();
+      let action = '';
+      if (installed) {
+        action = '<p class="text-xs text-emerald-300 font-semibold">AlphaHome ya está instalada en este dispositivo.</p>';
+      } else if (deferredInstallPrompt) {
+        action = `
+          <button id="btn-instalar-app" type="button" onclick="triggerPwaInstall()" class="w-full py-3 rounded-2xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs shadow-lg shadow-cyan-600/20 transition">
+            Instalar app
+          </button>`;
+      } else if (isIosDevice()) {
+        action = '<p class="text-xs text-slate-300">En iPhone: <b>Compartir &gt; Agregar a inicio</b>.</p>';
+      } else {
+        action = '<p class="text-xs text-slate-400">En Chrome: menú <b>⋮ → Agregar a pantalla principal</b>.</p>';
+      }
+
+      return `
+        <div class="p-4 rounded-3xl bg-surface-900 border border-slate-800 space-y-3">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">App en tu Teléfono</h3>
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0 border border-cyan-400/30">
+              <svg class="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/>
+              </svg>
+            </div>
+            <div class="min-w-0">
+              <p class="text-sm font-bold text-white">Instálala y úsala sin conexión</p>
+              <p class="text-xs text-slate-400 mt-0.5">Después de la primera visita funciona a pantalla completa, también sin internet.</p>
+            </div>
+          </div>
+          ${action}
+        </div>`;
+    }
+
+    function showAppUpdateToast(worker) {
+      const container = document.getElementById('toast-container');
+      if (!container || !worker || document.getElementById('sw-update-toast')) return;
+      const el = document.createElement('button');
+      el.id = 'sw-update-toast';
+      el.type = 'button';
+      el.className = 'pointer-events-auto px-4 py-2.5 rounded-2xl text-xs font-bold shadow-xl text-center bg-cyan-600 text-white';
+      el.textContent = 'Nueva versión disponible, recargar';
+      el.addEventListener('click', () => requestSwActivation(worker));
+      container.appendChild(el);
+    }
+
+    function requestSwActivation(worker) {
+      if (!worker) return;
+      appUpdateReady = true;
+      try { sessionStorage.setItem(SW_RELOAD_FLAG, '1'); } catch (e) {}
+      try { worker.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
+    }
+
+    function navigationWasReload() {
+      try {
+        const nav = performance.getEntriesByType('navigation')[0];
+        return !!(nav && nav.type === 'reload');
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function watchServiceWorker(reg) {
+      swRegistration = reg;
+      const waiting = reg.waiting;
+      if (waiting && navigator.serviceWorker.controller) {
+        if (navigationWasReload()) requestSwActivation(waiting);
+        else showAppUpdateToast(waiting);
+      }
+      reg.addEventListener('updatefound', () => {
+        const worker = reg.installing;
+        if (!worker) return;
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+            showAppUpdateToast(worker);
+          }
+        });
+      });
+    }
+
+    function registerServiceWorker() {
+      if (!('serviceWorker' in navigator)) return;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        let pending = appUpdateReady;
+        try {
+          if (sessionStorage.getItem(SW_RELOAD_FLAG) === '1') pending = true;
+          sessionStorage.removeItem(SW_RELOAD_FLAG);
+        } catch (e) {}
+        if (!pending) return;
+        window.location.reload();
+      });
+      navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' })
+        .then((reg) => {
+          watchServiceWorker(reg);
+        })
+        .catch((err) => {
+          console.warn('No se pudo registrar el service worker:', err);
+        });
+    }
+
     function triggerPwaInstall() {
-      if (!deferredInstallPrompt) return;
-      deferredInstallPrompt.prompt();
-      deferredInstallPrompt.userChoice.then(() => {
-        deferredInstallPrompt = null;
-        render();
-      }).catch(() => {});
+      const promptEvent = deferredInstallPrompt;
+      if (!promptEvent) return;
+      deferredInstallPrompt = null;
+      const finish = () => {
+        if (state.ui.activeTab === 'settings') render();
+      };
+      try {
+        const result = promptEvent.prompt();
+        if (promptEvent.userChoice && typeof promptEvent.userChoice.then === 'function') {
+          promptEvent.userChoice.then(finish).catch(finish);
+        } else if (result && typeof result.then === 'function') {
+          result.then(finish).catch(finish);
+        } else {
+          finish();
+        }
+      } catch (e) {
+        finish();
+      }
     }
 
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
+      if (isRunningStandalone()) return;
       deferredInstallPrompt = e;
       if (state.ui.activeTab === 'settings') render();
     });
 
-    window.addEventListener('DOMContentLoaded', () => {
-      initAppIconAndPWA();
-      if (state.activeWorkout) {
-        startSessionTicker();
+    window.addEventListener('appinstalled', () => {
+      deferredInstallPrompt = null;
+      if (state.ui.activeTab === 'settings') render();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && swRegistration && swRegistration.update) {
+        swRegistration.update().catch(() => {});
       }
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      registerServiceWorker();
+      if (state.activeWorkout) startSessionTicker();
+      syncWakeLock();
       render();
     });
   </script>
