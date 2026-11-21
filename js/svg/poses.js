@@ -1329,5 +1329,181 @@ export const POSES_3D = {
         ]
       };
     }
+  },
+
+  // =========================================================================
+  // 4 ARQUETIPOS EN BANCO DECLINADO (−18°)
+  // =========================================================================
+
+  // 29. PRESS DECLINADO CON MANCUERNAS (−18°)
+  decline_press: {
+    topMode: 'headTop',
+    eccentricFirst: false,
+    phaseLabels: ['Abajo pecho inferior', 'Empuje vertical', 'Extensión arriba', 'Descenso controlado'],
+    views: [
+      { label: 'Lateral (−18°)', cam: 'side', cue: 'Antebrazos verticales • Empuja recto arriba' },
+      { label: 'Frontal', cam: 'front', cue: 'Sube convergiendo sobre el pecho inferior' },
+      { label: 'Superior', cam: 'top', cue: 'Codos a ~45° del torso • Hombros cómodos' }
+    ],
+    trackPaths: [(s) => s.lArm.hand, (s) => s.rArm.hand],
+    pose(p) {
+      const a = deg(18);
+      const pelvis = v3(0, 54, 0);
+      const shMid = add(pelvis, v3(0, -Math.sin(a) * BONES.TORSO, -Math.cos(a) * BONES.TORSO));
+      const torso = buildTorsoFrame(pelvis, shMid, v3(0, Math.cos(a), -Math.sin(a)));
+
+      // Piernas enganchadas en los rodillos del extremo alto del banco declinado
+      const lLeg = solveLeg(torso.lHip, v3(12, 23, 42), v3(0.05, 1, 0.25), { customFoot: makeHangingFoot });
+      const rLeg = solveLeg(torso.rHip, v3(-12, 23, 42), v3(-0.05, 1, 0.25), { customFoot: makeHangingFoot });
+
+      const hx = lerp(31, 15, p);
+      const hy = lerp(49, 93, p);
+      const hz = lerp(-34, -36, p);
+
+      const lArm = solveArm(torso.lSh, v3(hx, hy, hz), v3(0.72, -0.75, 0.62));
+      const rArm = solveArm(torso.rSh, v3(-hx, hy, hz), v3(-0.72, -0.75, 0.62));
+
+      return {
+        floorY: 0,
+        bench: { kind: 'decline', pivotZ: 22, backAngleDeg: 18, backLen: 86, height: 54 },
+        torso, lLeg, rLeg, lArm, rArm,
+        dumbbells: [
+          { pos: lArm.hand, axis: v3(0.95, 0, -0.28) },
+          { pos: rArm.hand, axis: v3(0.95, 0, 0.28) }
+        ],
+        glows: [
+          { pos: add(lerp3(torso.pelvis, torso.shMid, 0.72), v3(9, 4, 0)), r: 17 },
+          { pos: add(lerp3(torso.pelvis, torso.shMid, 0.72), v3(-9, 4, 0)), r: 17 }
+        ]
+      };
+    }
+  },
+
+  // 30. APERTURAS DECLINADAS CON MANCUERNAS (−18°)
+  decline_fly: {
+    topMode: 'headTop',
+    eccentricFirst: false,
+    phaseLabels: ['Estiramiento abierto', 'Cierre en abrazo', 'Aprieta pecho inferior', 'Apertura controlada'],
+    views: [
+      { label: 'Lateral (−18°)', cam: 'side', cue: 'Codos semiflexionados fijos (~18°) en el arco' },
+      { label: 'Frontal', cam: 'front', cue: 'Abre controlado y cierra sobre el pecho bajo' },
+      { label: 'Superior', cam: 'top', cue: 'Trayectoria semicircular estable sin bajar de más' }
+    ],
+    trackPaths: [(s) => s.lArm.hand, (s) => s.rArm.hand],
+    pose(p) {
+      const a = deg(18);
+      const pelvis = v3(0, 54, 0);
+      const shMid = add(pelvis, v3(0, -Math.sin(a) * BONES.TORSO, -Math.cos(a) * BONES.TORSO));
+      const torso = buildTorsoFrame(pelvis, shMid, v3(0, Math.cos(a), -Math.sin(a)));
+
+      const lLeg = solveLeg(torso.lHip, v3(12, 23, 42), v3(0.05, 1, 0.25), { customFoot: makeHangingFoot });
+      const rLeg = solveLeg(torso.rHip, v3(-12, 23, 42), v3(-0.05, 1, 0.25), { customFoot: makeHangingFoot });
+
+      const reach = 53.5;
+      const openAng = deg(lerp(76, 13, p));
+      const lHandT = add(torso.lSh, v3(Math.sin(openAng) * reach, Math.cos(openAng) * reach, 10));
+      const rHandT = add(torso.rSh, v3(-Math.sin(openAng) * reach, Math.cos(openAng) * reach, 10));
+
+      const lArm = solveArm(torso.lSh, lHandT, v3(0.55, -0.55, 0.45));
+      const rArm = solveArm(torso.rSh, rHandT, v3(-0.55, -0.55, 0.45));
+
+      return {
+        floorY: 0,
+        bench: { kind: 'decline', pivotZ: 22, backAngleDeg: 18, backLen: 86, height: 54 },
+        torso, lLeg, rLeg, lArm, rArm,
+        dumbbells: [
+          { pos: lArm.hand, axis: torso.up },
+          { pos: rArm.hand, axis: torso.up }
+        ],
+        glows: [
+          { pos: add(lerp3(torso.pelvis, torso.shMid, 0.72), v3(9, 4, 0)), r: 17 },
+          { pos: add(lerp3(torso.pelvis, torso.shMid, 0.72), v3(-9, 4, 0)), r: 17 }
+        ]
+      };
+    }
+  },
+
+  // 31. PRESS FRANCÉS DECLINADO CON MANCUERNAS (−18°)
+  decline_french_press: {
+    topMode: 'headTop',
+    eccentricFirst: false,
+    phaseLabels: ['Estiramiento profundo', 'Extensión de codos', 'Contracción tríceps', 'Bajada controlada'],
+    views: [
+      { label: 'Lateral (−18°)', cam: 'side', cue: 'Mayor estiramiento de cabeza larga • Húmero fijo' },
+      { label: 'Frontal', cam: 'front', cue: 'Codos paralelos sin abrirse hacia los lados' },
+      { label: 'Superior', cam: 'top', cue: 'Mancuernas bajan controladas a lados de la cabeza' }
+    ],
+    trackPaths: [(s) => s.lArm.hand],
+    pose(p) {
+      const a = deg(18);
+      const pelvis = v3(0, 54, 0);
+      const shMid = add(pelvis, v3(0, -Math.sin(a) * BONES.TORSO, -Math.cos(a) * BONES.TORSO));
+      const torso = buildTorsoFrame(pelvis, shMid, v3(0, Math.cos(a), -Math.sin(a)));
+
+      const lLeg = solveLeg(torso.lHip, v3(12, 23, 42), v3(0.05, 1, 0.25), { customFoot: makeHangingFoot });
+      const rLeg = solveLeg(torso.rHip, v3(-12, 23, 42), v3(-0.05, 1, 0.25), { customFoot: makeHangingFoot });
+
+      const humTilt = deg(14);
+      const lEl = add(torso.lSh, v3(-1, Math.cos(humTilt) * BONES.UPPER_ARM, -Math.sin(humTilt) * BONES.UPPER_ARM));
+      const rEl = add(torso.rSh, v3(1, Math.cos(humTilt) * BONES.UPPER_ARM, -Math.sin(humTilt) * BONES.UPPER_ARM));
+
+      const fAng = deg(lerp(-140, -14, p));
+      const lHand = add(lEl, v3(0, Math.cos(fAng) * BONES.FOREARM, Math.sin(fAng) * BONES.FOREARM));
+      const rHand = add(rEl, v3(0, Math.cos(fAng) * BONES.FOREARM, Math.sin(fAng) * BONES.FOREARM));
+      const dbAxis = v3(0, -Math.sin(fAng), Math.cos(fAng));
+
+      return {
+        floorY: 0,
+        bench: { kind: 'decline', pivotZ: 22, backAngleDeg: 18, backLen: 86, height: 54 },
+        torso, lLeg, rLeg,
+        lArm: { elbow: lEl, hand: lHand },
+        rArm: { elbow: rEl, hand: rHand },
+        dumbbells: [
+          { pos: lHand, axis: dbAxis },
+          { pos: rHand, axis: dbAxis }
+        ],
+        glows: [
+          { pos: add(lerp3(torso.lSh, lEl, 0.5), v3(0, 0, -5)), r: 15 },
+          { pos: add(lerp3(torso.rSh, rEl, 0.5), v3(0, 0, -5)), r: 15 }
+        ]
+      };
+    }
+  },
+
+  // 32. CRUNCH DECLINADO EN BANCO (CORE / ABDOMEN)
+  decline_crunch: {
+    topMode: 'headTop',
+    eccentricFirst: false,
+    phaseLabels: ['Espalda apoyada', 'Flexión abdominal', 'Aprieta abdomen 1s', 'Descenso lento'],
+    views: [
+      { label: 'Lateral (−18°)', cam: 'side', cue: 'Enrolla costillas hacia pelvis sin dar tirones' },
+      { label: 'Frontal', cam: 'front', cue: 'Manos al pecho • Sube simétrico y controlado' },
+      { label: 'Superior', cam: 'top', cue: 'Tobillos firmes en rodillos • Cuello neutro' }
+    ],
+    trackPaths: [(s) => s.torso.shMid],
+    pose(p) {
+      const pelvis = v3(0, 54, 0);
+      // El torso pivota en flexión controlada de −18° (apoyado) a +34° (contracción abdominal)
+      const pitch = deg(lerp(-18, 34, p));
+      const shMid = add(pelvis, v3(0, Math.sin(pitch) * BONES.TORSO, -Math.cos(pitch) * BONES.TORSO));
+      const torso = buildTorsoFrame(pelvis, shMid, v3(0, Math.cos(pitch), Math.sin(pitch)));
+
+      const lLeg = solveLeg(torso.lHip, v3(12, 23, 42), v3(0.05, 1, 0.25), { customFoot: makeHangingFoot });
+      const rLeg = solveLeg(torso.rHip, v3(-12, 23, 42), v3(-0.05, 1, 0.25), { customFoot: makeHangingFoot });
+
+      // Manos cruzadas/apoyadas sobre el pecho (sin jalar el cuello!)
+      const chestCenter = add(lerp3(torso.pelvis, torso.shMid, 0.78), mul(torso.fwd, 9));
+      const lArm = solveArm(torso.lSh, add(chestCenter, v3(-4, 0, 0)), add(mul(torso.left, 0.7), mul(torso.up, -0.7)));
+      const rArm = solveArm(torso.rSh, add(chestCenter, v3(4, 0, 0)), add(mul(torso.left, -0.7), mul(torso.up, -0.7)));
+
+      return {
+        floorY: 0,
+        bench: { kind: 'decline', pivotZ: 22, backAngleDeg: 18, backLen: 86, height: 54 },
+        torso, lLeg, rLeg, lArm, rArm,
+        glows: [
+          { pos: add(lerp3(torso.pelvis, torso.shMid, 0.42), mul(torso.fwd, 5)), r: 19 }
+        ]
+      };
+    }
   }
 };

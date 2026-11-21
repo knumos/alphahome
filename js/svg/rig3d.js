@@ -304,6 +304,60 @@ function renderBench(items, bench, cam) {
         `
       });
     }
+  } else if (bench.kind === 'decline') {
+    // Banco declinado (-18° hacia la cabeza en -Z) con rodillos de sujeción de rodillas/tobillos en +Z
+    const pivotZ = bench.pivotZ ?? 14;
+    const backLen = bench.backLen ?? 76;
+    const angle = deg(bench.backAngleDeg ?? 18);
+    const padY = h - 3;
+
+    const highEnd = v3(0, padY, pivotZ + 12);
+    const lowEnd = v3(0, padY - Math.sin(angle) * backLen, pivotZ - Math.cos(angle) * backLen);
+
+    // Patas soporte trasero (bajo) y delantero (alto) + barra de rodillos
+    const legPairs = [
+      [lerp3(highEnd, lowEnd, 0.85), v3(0, 0, lerp(highEnd.z, lowEnd.z, 0.85))],
+      [v3(0, padY - 2, pivotZ + 6), v3(0, 0, pivotZ + 10)]
+    ];
+    const xs = cam.type === 'side' ? [0] : [-w * 0.36, w * 0.36];
+    for (const [topP, botP] of legPairs) {
+      for (const lx of xs) {
+        const a = projectPoint(v3(lx, topP.y, topP.z), cam);
+        const b = projectPoint(v3(lx, botP.y, botP.z), cam);
+        items.push({
+          d: Math.min(a.d, b.d) - 8,
+          svg: `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${legColor}" stroke-width="3.8" stroke-linecap="round"/>`
+        });
+      }
+    }
+
+    // Colchón declinado
+    addBox3D(items, highEnd, lowEnd, w, 7, cam, fill, stroke);
+
+    // Rodillos acolchados de sujeción de tobillos/rodillas en el extremo alto (+Z)
+    const kneeRoller = v3(0, padY - 1, pivotZ + 16);
+    const ankleRoller = v3(0, padY - 24, pivotZ + 26);
+    if (cam.type === 'side') {
+      const pk = projectPoint(kneeRoller, cam);
+      const pa = projectPoint(ankleRoller, cam);
+      items.push({
+        d: 26,
+        svg: `
+          <line x1="${pk.x.toFixed(1)}" y1="${pk.y.toFixed(1)}" x2="${pa.x.toFixed(1)}" y2="${pa.y.toFixed(1)}" stroke="${legColor}" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="${pk.x.toFixed(1)}" cy="${pk.y.toFixed(1)}" r="4.2" fill="#334155" stroke="#64748b" stroke-width="1.3"/>
+          <circle cx="${pa.x.toFixed(1)}" cy="${pa.y.toFixed(1)}" r="4.6" fill="#334155" stroke="#64748b" stroke-width="1.3"/>
+        `
+      });
+    } else {
+      for (const rPt of [kneeRoller, ankleRoller]) {
+        const rL = projectPoint(v3(-w * 0.65, rPt.y, rPt.z), cam);
+        const rR = projectPoint(v3(w * 0.65, rPt.y, rPt.z), cam);
+        items.push({
+          d: (rL.d + rR.d) / 2 + 2,
+          svg: `<line x1="${rL.x.toFixed(1)}" y1="${rL.y.toFixed(1)}" x2="${rR.x.toFixed(1)}" y2="${rR.y.toFixed(1)}" stroke="#475569" stroke-width="6" stroke-linecap="round"/>`
+        });
+      }
+    }
   }
 }
 
@@ -599,6 +653,9 @@ function computeCamera(poseFn, viewType, options = {}) {
       } else if (s.bench.kind === 'adjustable') {
         includePt(v3(0, 0, (s.bench.pivotZ ?? 0) - 65));
         includePt(v3(0, 0, (s.bench.pivotZ ?? 0) + 55));
+      } else if (s.bench.kind === 'decline') {
+        includePt(v3(0, 0, (s.bench.pivotZ ?? 14) - 76));
+        includePt(v3(0, s.bench.height ?? 54, (s.bench.pivotZ ?? 14) + 32));
       }
     }
     if (s.floorY !== null && s.floorY !== undefined && viewType !== 'top') {

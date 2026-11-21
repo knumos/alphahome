@@ -117,7 +117,7 @@ export const ROUTINE_TEMPLATES = [
               id: 'd3_e1', name: 'Press Plano con Mancuernas',
               sets: 3, minReps: 10, maxReps: 12, restSec: 120,
               equipment: 'dumbbell', bilateral: true, stepKg: 2, superset: null,
-              alternatives: ['Flexiones en Suelo', 'Press plano con banda en espalda']
+              alternatives: ['Press Declinado con Mancuernas', 'Flexiones en Suelo', 'Press plano con banda en espalda']
             },
             {
               id: 'd3_e2', name: 'Dominadas Supinas en Barra',
@@ -135,7 +135,7 @@ export const ROUTINE_TEMPLATES = [
               id: 'd3_e4', name: 'Aperturas con Banda de Resistencia',
               sets: 3, minReps: 12, maxReps: 15, restSec: 60,
               equipment: 'band', bilateral: true, stepKg: 0, superset: null,
-              alternatives: ['Press cerrado con mancuernas', 'Aperturas Inclinadas con Mancuernas']
+              alternatives: ['Aperturas Declinadas con Mancuernas', 'Aperturas Inclinadas con Mancuernas', 'Press cerrado con mancuernas']
             },
             {
               id: 'd3_e5', name: 'Pájaros Sentado en Banco',
@@ -179,7 +179,7 @@ export const ROUTINE_TEMPLATES = [
               id: 'd4_e4', name: 'Press Francés con Mancuernas en Banco',
               sets: 3, minReps: 10, maxReps: 12, restSec: 75,
               equipment: 'dumbbell', bilateral: true, stepKg: 1, superset: 'SUPERSERIE B',
-              alternatives: ['Copa de Tríceps con Mancuerna']
+              alternatives: ['Press Francés Declinado con Mancuernas', 'Copa de Tríceps con Mancuerna']
             },
             {
               id: 'd4_e5', name: 'Hip Thrust en Banco con Mancuernas',

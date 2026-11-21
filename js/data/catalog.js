@@ -32,11 +32,28 @@ export const EXERCISE_CATALOG = [
     sets: 3, minReps: 10, maxReps: 12, restSec: 120,
     archetype: 'flat_press',
     muscles: 'Pectoral mayor • Deltoide anterior • Tríceps',
-    alternatives: ['Flexiones con chaleco y pies en banco', 'Press plano con banda en espalda'],
+    alternatives: ['Press Declinado con Mancuernas', 'Flexiones con chaleco y pies en banco', 'Press plano con banda en espalda'],
     cues: [
       ['Postura', 'Acostado en banco horizontal, escápulas juntas hacia atrás y abajo, pies firmes.'],
       ['Recorrido', 'Baja con codos a ~45° hasta que las mancuernas queden al nivel del pecho y empuja en arco sutil.'],
       ['Error común', 'Rebotar abajo o abrir los codos a 90° cargando el hombro anterior.']
+    ]
+  },
+  {
+    id: 'decline_press',
+    name: 'Press Declinado con Mancuernas',
+    group: 'Pecho',
+    equipment: 'dumbbell',
+    bilateral: true,
+    stepKg: 2,
+    sets: 3, minReps: 8, maxReps: 12, restSec: 120,
+    archetype: 'decline_press',
+    muscles: 'Pectoral inferior (costal) • Pectoral esternal • Tríceps',
+    alternatives: ['Press Plano con Mancuernas', 'Aperturas Declinadas con Mancuernas', 'Flexiones en Suelo'],
+    cues: [
+      ['Postura', 'Banco declinado (−15° a −20°), tobillos bien sujetos en los rodillos y escápulas retraídas.'],
+      ['Recorrido', 'Baja controlado con codos a ~45° hacia la línea inferior del pecho y empuja verticalmente arriba.'],
+      ['Error común', 'Bajar las mancuernas hacia el cuello en vez del pecho inferior o rebotar abajo.']
     ]
   },
   {
@@ -49,11 +66,28 @@ export const EXERCISE_CATALOG = [
     sets: 3, minReps: 12, maxReps: 15, restSec: 60,
     archetype: 'incline_fly',
     muscles: 'Pectoral superior • Pectoral esternal',
-    alternatives: ['Aperturas con banda de resistencia', 'Flexiones con banda'],
+    alternatives: ['Aperturas Declinadas con Mancuernas', 'Aperturas con Banda de Resistencia', 'Flexiones con banda'],
     cues: [
       ['Postura', 'Banco a 30° con ligera flexión fija en los codos (~15–20°) durante toda la serie.'],
       ['Recorrido', 'Abre en arco amplio hasta sentir estiramiento cómodo en el pecho y cierra como en un abrazo.'],
       ['Error común', 'Bajar demasiado forzando la cápsula anterior del hombro o convertirlo en un press.']
+    ]
+  },
+  {
+    id: 'decline_fly',
+    name: 'Aperturas Declinadas con Mancuernas',
+    group: 'Pecho',
+    equipment: 'dumbbell',
+    bilateral: true,
+    stepKg: 1,
+    sets: 3, minReps: 12, maxReps: 15, restSec: 60,
+    archetype: 'decline_fly',
+    muscles: 'Pectoral inferior • Pectoral esternal',
+    alternatives: ['Aperturas Inclinadas con Mancuernas', 'Aperturas con Banda de Resistencia'],
+    cues: [
+      ['Postura', 'Banco declinado (−15° a −20°), piernas aseguradas en los rodillos y leve flexión fija de codos (~18°).'],
+      ['Recorrido', 'Abre en arco controlado hasta sentir estiramiento suave y cierra arriba sobre el pecho inferior.'],
+      ['Error común', 'Extender por completo los codos o bajar demasiado cargando la articulación del hombro.']
     ]
   },
   {
@@ -400,7 +434,7 @@ export const EXERCISE_CATALOG = [
     sets: 3, minReps: 10, maxReps: 12, restSec: 75,
     archetype: 'french_press',
     muscles: 'Tríceps braquial (énfasis cabeza larga)',
-    alternatives: ['Copa de Tríceps con Mancuerna', 'Extensión de Tríceps con Banda en Barra'],
+    alternatives: ['Press Francés Declinado con Mancuernas', 'Copa de Tríceps con Mancuerna', 'Extensión de Tríceps con Banda en Barra'],
     cues: [
       ['Postura', 'Acostado en banco horizontal, brazos extendidos con ligera inclinación hacia atrás (~15°) para mantener tensión.'],
       ['Recorrido', 'Flexiona solo los codos bajando las mancuernas a los lados de la cabeza y extiende sin bloquear bruscamente.'],
@@ -456,6 +490,42 @@ export const EXERCISE_CATALOG = [
       ['Postura', 'Torso inclinado estable y codos altos fijados junto a las costillas.'],
       ['Recorrido', 'Extiende los antebrazos completamente hacia atrás apretando el tríceps 1s sin dejar caer el codo.'],
       ['Error común', 'Balancear los hombros o usar mancuernas demasiado pesadas recortando la extensión.']
+    ]
+  },
+  {
+    id: 'decline_french_press',
+    name: 'Press Francés Declinado con Mancuernas',
+    group: 'Brazos',
+    equipment: 'dumbbell',
+    bilateral: true,
+    stepKg: 1,
+    sets: 3, minReps: 10, maxReps: 12, restSec: 75,
+    archetype: 'decline_french_press',
+    muscles: 'Tríceps braquial (máximo estiramiento cabeza larga)',
+    alternatives: ['Press Francés con Mancuernas en Banco', 'Copa de Tríceps con Mancuerna'],
+    cues: [
+      ['Postura', 'Banco declinado (−15° a −20°), tobillos sujetos y brazos inclinados ~15° hacia atrás.'],
+      ['Recorrido', 'Flexiona solo los codos bajando las mancuernas a los lados de la cabeza y extiende sin bloquear bruscamente.'],
+      ['Error común', 'Abrir los codos hacia los lados o mover los hombros para ayudarte con impulso.']
+    ]
+  },
+
+  // ---- CORE / ABDOMEN ----
+  {
+    id: 'decline_crunch',
+    name: 'Crunch Declinado en Banco',
+    group: 'Core',
+    equipment: 'bodyweight',
+    bilateral: true,
+    stepKg: 2,
+    sets: 3, minReps: 12, maxReps: 20, restSec: 60,
+    archetype: 'decline_crunch',
+    muscles: 'Recto abdominal • Oblicuos • Core anterior',
+    alternatives: ['Crunch declinado con mancuerna al pecho'],
+    cues: [
+      ['Postura', 'Engancha los tobillos en los rodillos del banco declinado y apoya las manos suavemente sobre el pecho.'],
+      ['Recorrido', 'Exhala enrollando las costillas hacia la pelvis (sin jalar el cuello), pausa 1s arriba y baja lento en 2–3s.'],
+      ['Error común', 'Subir con tirón de cadera manteniendo la espalda completamente rígida o jalar la nuca con las manos.']
     ]
   },
 
@@ -535,6 +605,9 @@ export function resolveExerciseGuide(name) {
     return byArch('flat_press');
   }
 
+  // Core / Abdomen
+  if (n.includes('crunch') || n.includes('abdom')) return byArch('decline_crunch');
+
   // Pierna / glúteo (antes que curl para no confundir curl femoral con bíceps!)
   if (n.includes('femoral')) return byArch('leg_curl_band');
   if (n.includes('búlgara') || n.includes('bulgara')) return byArch('bulgarian');
@@ -544,8 +617,11 @@ export function resolveExerciseGuide(name) {
   if (n.includes('rumano') || n.includes('bisagra') || n.includes('good morning')) return byArch('rdl');
   if (n.includes('sentadilla') || n.includes('goblet')) return byArch('goblet_squat');
 
-  // Empuje pecho / hombro
+  // Empuje pecho / hombro (respetar variantes declinadas!)
   if (n.includes('flexion') || n.includes('lagartija')) return byArch('pushup');
+  if (n.includes('declinad') && (n.includes('francés') || n.includes('frances'))) return byArch('decline_french_press');
+  if (n.includes('declinad') && n.includes('apertura')) return byArch('decline_fly');
+  if (n.includes('declinad') && n.includes('press')) return byArch('decline_press');
   if (n.includes('inclinado') && n.includes('press')) return byArch('incline_press');
   if (n.includes('press plano') || n.includes('press cerrado') || n.includes('pecho')) return byArch('flat_press');
   if (n.includes('militar') || n.includes('arnold') || n.includes('wall slide')) return byArch('overhead_press');
