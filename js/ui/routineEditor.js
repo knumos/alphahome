@@ -4,7 +4,8 @@
 
 import { EXERCISE_CATALOG, getCatalogGroups } from '../data/catalog.js';
 import { ROUTINE_TEMPLATES } from '../data/templates.js';
-import { state, saveState, applyRoutineTemplate, exportRoutinesOnly, parseImportedRoutines } from '../state.js';
+import { state, saveState, replaceState, applyRoutineTemplate, exportRoutinesOnly, exportSetup, classifyImport, applySharedPayload } from '../state.js';
+import { movementFits } from '../engine/adapt.js';
 import { escapeHtml, formatTime, openModal, closeModal, showToast } from '../utils.js';
 
 export function openRoutineManagerModal(onChanged, openTech) {
@@ -43,8 +44,9 @@ export function openRoutineManagerModal(onChanged, openTech) {
       <p class="section-eyebrow mb-2">Plantillas y Compartir</p>
       <div class="grid-2 gap-2">
         <button type="button" id="rm-templates" class="btn btn--surface btn--sm">📋 Elegir plantilla</button>
-        <button type="button" id="rm-export" class="btn btn--surface btn--sm text-emerald">⬇ Compartir rutina</button>
+        <button type="button" id="rm-export" class="btn btn--surface btn--sm text-emerald">⬇ Solo rutina</button>
       </div>
+      <button type="button" id="rm-export-setup" class="btn btn--surface btn--block btn--sm mt-2">⬇ Rutina + equipo, espacio y meta</button>
       <label class="btn btn--surface btn--block btn--sm mt-2 cursor-pointer text-accent">
         ⬆ Importar rutina compartida (.json)
         <input id="rm-import" type="file" accept=".json,application/json" class="hidden" />
@@ -105,7 +107,12 @@ export function openRoutineManagerModal(onChanged, openTech) {
 
     root.querySelector('#rm-export')?.addEventListener('click', () => {
       exportRoutinesOnly();
-      showToast('Archivo de rutina descargado para compartir.', 'success');
+      showToast('Rutina descargada, sin historial.', 'success');
+    });
+
+    root.querySelector('#rm-export-setup')?.addEventListener('click', () => {
+      exportSetup();
+      showToast('Rutina y configuración descargadas, sin historial.', 'success');
     });
 
     root.querySelector('#rm-import')?.addEventListener('change', (ev) => {
@@ -114,12 +121,21 @@ export function openRoutineManagerModal(onChanged, openTech) {
       const reader = new FileReader();
       reader.onload = (e) => {
         try {
-          const routines = parseImportedRoutines(e.target.result);
-          state.routines = routines;
-          saveState();
-          onChanged();
-          showToast(`Rutina importada (${routines.length} días). Tu historial se mantuvo intacto.`, 'success');
-          renderManager();
+          const parsed = JSON.parse(e.target.result);
+          const kind = classifyImport(parsed);
+          if (kind === 'invalid') throw new Error('inválido');
+          if (kind === 'backup') {
+            const next = applySharedPayload(state, parsed, 'routines');
+            replaceState(next);
+            onChanged();
+            showToast('Se tomaron solo las rutinas del respaldo. El historial de este teléfono sigue igual. Para restaurar todo usa Ajustes.', 'success');
+            renderManager();
+            return;
+          }
+          openShareImportModal(parsed, () => {
+            onChanged();
+            renderManager();
+          });
         } catch {
           showToast('Archivo de rutina inválido.', 'error');
         }
@@ -413,16 +429,21 @@ function openCatalogPickerModal(day, onChanged, openTech, onBack) {
 
   const renderList = () => {
     const q = query.toLowerCase().trim();
-    const filtered = EXERCISE_CATALOG.filter((item) => {
+    const pool = EXERCISE_CATALOG.filter((item) => {
       if (item.group === 'Calentamiento') return false;
       if (activeGroup !== 'Todos' && item.group !== activeGroup) return false;
       if (q && !item.name.toLowerCase().includes(q) && !item.muscles.toLowerCase().includes(q)) return false;
       return true;
     });
+    const hidden = pool.filter((item) => !movementFits(item.name, state.equipment, state.space)).length;
+    const filtered = pool.filter((item) => movementFits(item.name, state.equipment, state.space));
 
     const listEl = document.getElementById('cp-list');
     if (!listEl) return;
-    listEl.innerHTML = filtered.length
+    const hiddenNote = hidden
+      ? `<p class="text-2xs text-muted">Ocultos por equipo o espacio: ${hidden}. El pasillo y la barra solo aparecen si los declaraste.</p>`
+      : '';
+    listEl.innerHTML = hiddenNote + (filtered.length
       ? filtered.map((item) => `
           <div class="list-card row-between gap-2">
             <div class="min-w-0">
@@ -434,7 +455,7 @@ function openCatalogPickerModal(day, onChanged, openTech, onBack) {
             </div>
           </div>
         `).join('')
-      : '<p class="text-xs text-muted text-center py-4">No hay coincidencias. Puedes agregarlo como ejercicio personalizado abajo.</p>';
+      : '<p class="text-xs text-muted text-center py-4">No hay coincidencias. Puedes crear un ejercicio personalizado abajo.</p>');
 
     listEl.querySelectorAll('[data-add-cat]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -528,4 +549,48 @@ function openCatalogPickerModal(day, onChanged, openTech, onBack) {
   });
 
   renderList();
+}
+
+export function openShareImportModal(parsed, onApplied) {
+  const kind = classifyImport(parsed);
+  const apply = (mode) => {
+    const before = (state.history || []).length;
+    const next = applySharedPayload(state, parsed, mode);
+    if ((next.history || []).length !== before) {
+      showToast('Se canceló la importación para no tocar tu historial.', 'error');
+      return;
+    }
+    replaceState(next);
+    closeModal(true);
+    const label = mode === 'setup' ? 'Rutina y configuración importadas' : 'Rutina importada';
+    showToast(`${label}. Tu historial (${before} sesiones) sigue igual.`, 'success');
+    if (onApplied) onApplied();
+  };
+
+  if (kind === 'routines' || kind === 'backup') {
+    apply('routines');
+    return;
+  }
+  if (kind !== 'setup') {
+    showToast('Ese archivo no trae una rutina para compartir.', 'error');
+    return;
+  }
+
+  const cfg = parsed.config || {};
+  openModal(`
+    <div class="modal-header">
+      <h3 class="modal-title">Importar rutina compartida</h3>
+      <button type="button" class="icon-btn" data-close-modal aria-label="Cerrar">✕</button>
+    </div>
+    <p class="text-xs text-muted mt-2">De ${escapeHtml(parsed.author || 'otra persona')}. Ninguna opción borra tu historial, tus pesajes ni la sesión en curso.</p>
+    <div class="stack-2 mt-4">
+      <button type="button" id="share-routines" class="btn btn--surface btn--block">Solo la rutina</button>
+      <button type="button" id="share-setup" class="btn btn--primary btn--block">Rutina + configuración</button>
+    </div>
+    <p class="text-2xs text-muted mt-3">La configuración incluye equipo, espacio, objetivo (${escapeHtml(String(cfg.goal || 'general'))}), nivel y días por semana.</p>
+  `);
+  const root = document.getElementById('modal-content');
+  root?.querySelector('[data-close-modal]')?.addEventListener('click', () => closeModal());
+  root?.querySelector('#share-routines')?.addEventListener('click', () => apply('routines'));
+  root?.querySelector('#share-setup')?.addEventListener('click', () => apply('setup'));
 }

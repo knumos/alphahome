@@ -136,7 +136,7 @@ export const EXERCISE_CATALOG = [
     sets: 3, minReps: 6, maxReps: 10, restSec: 120,
     archetype: 'pullup',
     muscles: 'Dorsal ancho • Espalda media • Bíceps',
-    alternatives: ['Dominadas con chaleco', 'Dominadas lastradas con cadena', 'Remo Pecho Apoyado en Banco'],
+    alternatives: ['Dominadas con chaleco', 'Pullover con Mancuerna en Banco', 'Remo Pecho Apoyado en Banco'],
     cues: [
       ['Postura', 'Agarre ligeramente más ancho que hombros, abdomen activo y piernas estables sin balanceo.'],
       ['Recorrido', 'Inicia deprimiendo escápulas y lleva el pecho hacia la barra; controla la bajada hasta extender codos.'],
@@ -153,7 +153,7 @@ export const EXERCISE_CATALOG = [
     sets: 3, minReps: 6, maxReps: 10, restSec: 120,
     archetype: 'chinup',
     muscles: 'Dorsal ancho • Bíceps braquial • Core',
-    alternatives: ['Dominadas supinas con chaleco', 'Dominadas isométricas arriba', 'Remo Serrucho a un Brazo en Banco'],
+    alternatives: ['Dominadas supinas con chaleco', 'Pullover con Mancuerna en Banco', 'Remo Serrucho a un Brazo en Banco'],
     cues: [
       ['Postura', 'Palmas mirando hacia ti al ancho de los hombros, torso estable y abdomen contraído.'],
       ['Recorrido', 'Sube llevando la barbilla por encima de la barra con codos apuntando hacia adelante/abajo y baja controlado.'],
@@ -170,7 +170,7 @@ export const EXERCISE_CATALOG = [
     sets: 3, minReps: 8, maxReps: 12, restSec: 90,
     archetype: 'chest_row',
     muscles: 'Dorsal • Romboides • Trapecio medio',
-    alternatives: ['Remo Serrucho a un Brazo en Banco', 'Remo con banda + mancuernas'],
+    alternatives: ['Remo Serrucho a un Brazo en Banco', 'Remo con Banda', 'Pullover con Mancuerna en Banco'],
     cues: [
       ['Postura', 'Banco a 30–40°, pecho pegado al respaldo todo el tiempo y cuello neutro.'],
       ['Recorrido', 'Jala las mancuernas hacia la cadera en arco ligero, apretando escápulas 1 segundo arriba.'],
@@ -241,7 +241,7 @@ export const EXERCISE_CATALOG = [
     sets: 3, minReps: 12, maxReps: 15, restSec: 60,
     archetype: 'face_pull',
     muscles: 'Deltoide posterior • Manguito rotador • Trapecio medio',
-    alternatives: ['Pájaros Sentado en Banco', 'Band Pull-Aparts'],
+    alternatives: ['Pájaros Sentado en Banco', 'Face Pull con Banda (sin barra)', 'Band Pull-Aparts'],
     cues: [
       ['Postura', 'Ancla la banda a la altura de la cara o ligeramente arriba, da un paso atrás con base estable.'],
       ['Recorrido', 'Jala hacia la frente separando las manos y rotando externamente (pose de doble bíceps) al final.'],
@@ -258,7 +258,7 @@ export const EXERCISE_CATALOG = [
     sets: 3, minReps: 12, maxReps: 15, restSec: 60,
     archetype: 'rear_delt',
     muscles: 'Deltoide posterior • Romboides',
-    alternatives: ['Face Pull con Banda en Barra', 'Band Pull-Aparts'],
+    alternatives: ['Face Pull con Banda en Barra', 'Face Pull con Banda (sin barra)', 'Band Pull-Aparts'],
     cues: [
       ['Postura', 'Siéntate al borde del banco e inclina el pecho cerca de los muslos manteniendo la espalda neutra.'],
       ['Recorrido', 'Abre los brazos hacia los lados y ligeramente atrás (~45°) liderando con codos, sin encoger trapecios.'],
@@ -381,7 +381,7 @@ export const EXERCISE_CATALOG = [
     note: 'Por pierna',
     archetype: 'lunge_rotation',
     muscles: 'Glúteos • Cuádriceps • Equilibrio',
-    alternatives: ['Sentadilla Búlgara en Banco', 'Sentadilla Goblet Talones Elevados'],
+    alternatives: ['Zancadas Caminando con Mancuernas', 'Sentadilla Búlgara en Banco', 'Sentadilla Goblet Talones Elevados'],
     cues: [
       ['Postura', 'De pie con mancuernas a los costados, pies separados al ancho de cadera y abdomen firme.'],
       ['Recorrido', 'Da un paso largo atrás bajando la rodilla suavemente cerca del suelo y regresa empujando con el talón delantero.'],
@@ -400,7 +400,7 @@ export const EXERCISE_CATALOG = [
     sets: 3, minReps: 10, maxReps: 12, restSec: 60,
     archetype: 'incline_curl',
     muscles: 'Bíceps braquial (cabeza larga) • Braquial',
-    alternatives: ['Curl Martillo con Mancuernas', 'Curl concentrado', 'Curl con banda'],
+    alternatives: ['Curl Martillo con Mancuernas', 'Curl con Cadena Ligera', 'Curl con banda'],
     cues: [
       ['Postura', 'Espalda y cabeza apoyadas en banco a 45°, brazos colgando perpendiculares al suelo detrás del torso.'],
       ['Recorrido', 'Flexiona los codos sin adelantarlos, supina la muñeca al subir y controla 2s la bajada completa.'],
@@ -417,7 +417,7 @@ export const EXERCISE_CATALOG = [
     sets: 3, minReps: 10, maxReps: 12, restSec: 60,
     archetype: 'hammer_curl',
     muscles: 'Braquial • Braquiorradial • Bíceps',
-    alternatives: ['Curl Zottman', 'Curl martillo con banda', 'Curl Inclinado en Banco 45°'],
+    alternatives: ['Curl con Cadena Ligera', 'Curl Zottman', 'Curl Inclinado en Banco 45°'],
     cues: [
       ['Postura', 'De pie o sentado, palmas enfrentadas (agarre neutro) y codos pegados a los costados.'],
       ['Recorrido', 'Sube las mancuernas hacia los hombros manteniendo muñecas firmes y frena el descenso 2 segundos.'],
@@ -521,11 +521,259 @@ export const EXERCISE_CATALOG = [
     sets: 3, minReps: 12, maxReps: 20, restSec: 60,
     archetype: 'decline_crunch',
     muscles: 'Recto abdominal • Oblicuos • Core anterior',
-    alternatives: ['Crunch declinado con mancuerna al pecho'],
+    alternatives: ['Plancha Frontal', 'Plancha Lateral', 'Crunch declinado con mancuerna al pecho'],
     cues: [
       ['Postura', 'Engancha los tobillos en los rodillos del banco declinado y apoya las manos suavemente sobre el pecho.'],
       ['Recorrido', 'Exhala enrollando las costillas hacia la pelvis (sin jalar el cuello), pausa 1s arriba y baja lento en 2–3s.'],
       ['Error común', 'Subir con tirón de cadera manteniendo la espalda completamente rígida o jalar la nuca con las manos.']
+    ]
+  },
+
+  // ---- ESPALDA / TIRÓN EXTRA, CORE, GEMELOS, PASILLO ----
+  {
+    id: 'db_pullover',
+    name: 'Pullover con Mancuerna en Banco',
+    group: 'Espalda',
+    equipment: 'dumbbell',
+    bilateral: false,
+    stepKg: 1,
+    sets: 3, minReps: 10, maxReps: 12, restSec: 90,
+    archetype: 'french_press',
+    muscles: 'Dorsal ancho • Pectoral • Serrato',
+    alternatives: ['Jalón con Banda en Barra', 'Remo Pecho Apoyado en Banco'],
+    cues: [
+      ['Postura', 'Acostado en el banco, una mancuerna sujeta con ambas manos sobre el pecho y costillas bajas firmes.'],
+      ['Recorrido', 'Baja los brazos por detrás de la cabeza con codos levemente flexionados hasta sentir el dorsal y regresa al pecho.'],
+      ['Error común', 'Arquear la lumbar para bajar más o doblar demasiado los codos convirtiéndolo en un press francés.']
+    ]
+  },
+  {
+    id: 'band_pulldown',
+    name: 'Jalón con Banda en Barra',
+    group: 'Espalda',
+    equipment: 'band',
+    bilateral: true,
+    stepKg: 0,
+    sets: 3, minReps: 10, maxReps: 15, restSec: 90,
+    archetype: 'pullup',
+    muscles: 'Dorsal ancho • Bíceps • Escápulas',
+    alternatives: ['Pullover con Mancuerna en Banco', 'Remo Pecho Apoyado en Banco'],
+    cues: [
+      ['Postura', 'Ancla la banda en la barra de dominadas, arrodíllate o siéntate y sujeta los extremos con los brazos arriba.'],
+      ['Recorrido', 'Jala los codos hacia las costillas llevando las manos al pecho y sube controlado hasta estirar el dorsal.'],
+      ['Error común', 'Echar el torso hacia atrás para usar el peso del cuerpo o encoger los hombros.']
+    ]
+  },
+  {
+    id: 'band_row',
+    name: 'Remo con Banda',
+    group: 'Espalda',
+    equipment: 'band',
+    bilateral: true,
+    stepKg: 0,
+    sets: 3, minReps: 10, maxReps: 15, restSec: 75,
+    archetype: 'chest_row',
+    muscles: 'Dorsal • Romboides • Bíceps',
+    alternatives: ['Remo Pecho Apoyado en Banco', 'Remo Serrucho a un Brazo en Banco'],
+    cues: [
+      ['Postura', 'Pisa la banda o anclala a la altura de la cadera, pecho abierto y rodillas semiflexionadas.'],
+      ['Recorrido', 'Jala los codos hacia atrás rozando el costado y aprieta escápulas 1s sin encoger trapecios.'],
+      ['Error común', 'Redondear la lumbar o tirar con los hombros hacia las orejas.']
+    ]
+  },
+  {
+    id: 'band_face_pull_free',
+    name: 'Face Pull con Banda (sin barra)',
+    group: 'Hombros',
+    equipment: 'band',
+    bilateral: true,
+    stepKg: 0,
+    sets: 3, minReps: 12, maxReps: 15, restSec: 60,
+    archetype: 'face_pull',
+    muscles: 'Deltoide posterior • Manguito rotador',
+    alternatives: ['Pájaros Sentado en Banco', 'Band Pull-Aparts'],
+    cues: [
+      ['Postura', 'Ancla la banda a un punto bajo o a la altura de la cara (puerta o poste), no hace falta la barra de dominadas.'],
+      ['Recorrido', 'Jala hacia la frente separando las manos y rotando los hombros hacia afuera al final.'],
+      ['Error común', 'Tirar hacia la cintura o echarte hacia atrás para compensar.']
+    ]
+  },
+  {
+    id: 'front_plank',
+    name: 'Plancha Frontal',
+    group: 'Core',
+    equipment: 'bodyweight',
+    bilateral: true,
+    stepKg: 0,
+    sets: 3, minReps: 20, maxReps: 40, restSec: 45,
+    note: 'Segundos',
+    archetype: 'pushup',
+    muscles: 'Recto abdominal • Transverso • Glúteos',
+    alternatives: ['Plancha Lateral', 'Crunch Declinado en Banco'],
+    cues: [
+      ['Postura', 'Antebrazos bajo los hombros, cuerpo en línea de cabeza a talones y glúteos activos.'],
+      ['Recorrido', 'Mantén la posición respirando, costillas abajo y pelvis neutra durante los segundos marcados.'],
+      ['Error común', 'Dejar caer la cadera o subir el glúteo en pica.']
+    ]
+  },
+  {
+    id: 'side_plank',
+    name: 'Plancha Lateral',
+    group: 'Core',
+    equipment: 'bodyweight',
+    bilateral: false,
+    stepKg: 0,
+    sets: 3, minReps: 15, maxReps: 30, restSec: 45,
+    note: 'Segundos por lado',
+    archetype: 'pushup',
+    muscles: 'Oblicuos • Glúteo medio • Core lateral',
+    alternatives: ['Plancha Frontal', 'Press Pallof con Banda'],
+    cues: [
+      ['Postura', 'Apoyo de antebrazo y canto del pie, cadera elevada y hombros alineados.'],
+      ['Recorrido', 'Sostén sin dejar caer la cadera; cambia de lado al terminar los segundos.'],
+      ['Error común', 'Rotar el pecho hacia el suelo o hundir el hombro de apoyo.']
+    ]
+  },
+  {
+    id: 'pallof_press',
+    name: 'Press Pallof con Banda',
+    group: 'Core',
+    equipment: 'band',
+    bilateral: false,
+    stepKg: 0,
+    sets: 3, minReps: 8, maxReps: 12, restSec: 45,
+    note: 'Por lado',
+    archetype: 'band_fly',
+    muscles: 'Oblicuos • Transverso • Estabilidad antirotación',
+    alternatives: ['Plancha Lateral', 'Plancha Frontal'],
+    cues: [
+      ['Postura', 'Banda anclada a un lado del pecho, pies estables y manos juntas frente al esternón.'],
+      ['Recorrido', 'Empuja las manos al frente sin dejar que el torso gire y regresa lento.'],
+      ['Error común', 'Girar el tronco hacia el anclaje o separar los pies en exceso.']
+    ]
+  },
+  {
+    id: 'calf_raise_stand',
+    name: 'Elevación de Gemelos de Pie',
+    group: 'Pierna / Glúteo',
+    equipment: 'dumbbell',
+    bilateral: true,
+    stepKg: 2,
+    sets: 3, minReps: 10, maxReps: 15, restSec: 60,
+    archetype: 'goblet_squat',
+    muscles: 'Gastrocnemio • Sóleo',
+    alternatives: ['Elevación de Gemelos Sentado'],
+    cues: [
+      ['Postura', 'De pie, mancuernas a los costados y metatarsos sobre un libro o cuña baja si quieres más rango.'],
+      ['Recorrido', 'Sube a puntas en 1s, pausa arriba y baja el talón controlado por debajo del nivel del pie delantero.'],
+      ['Error común', 'Rebotar abajo o flexionar las rodillas para impulsarte.']
+    ]
+  },
+  {
+    id: 'calf_raise_seated',
+    name: 'Elevación de Gemelos Sentado',
+    group: 'Pierna / Glúteo',
+    equipment: 'dumbbell',
+    bilateral: false,
+    stepKg: 2,
+    sets: 3, minReps: 12, maxReps: 15, restSec: 60,
+    archetype: 'goblet_squat',
+    muscles: 'Sóleo • Gastrocnemio',
+    alternatives: ['Elevación de Gemelos de Pie'],
+    cues: [
+      ['Postura', 'Sentado en el banco, mancuerna sobre el muslo cerca de la rodilla y antepié en el suelo o en una cuña.'],
+      ['Recorrido', 'Eleva el talón apretando el gemelo y baja lento sin soltar la mancuerna.'],
+      ['Error común', 'Dejar rodar la mancuerna o hacer el gesto solo con la cadera.']
+    ]
+  },
+  {
+    id: 'bench_dip',
+    name: 'Fondos en Banco Lastrados',
+    group: 'Brazos',
+    equipment: 'bodyweight',
+    bilateral: true,
+    stepKg: 2,
+    sets: 3, minReps: 8, maxReps: 12, restSec: 90,
+    archetype: 'pushup',
+    muscles: 'Tríceps • Pectoral inferior • Deltoide anterior',
+    note: 'Chaleco o cinturón + mancuerna; la cadena no suma kilos',
+    alternatives: ['Flexiones en Suelo', 'Press Francés con Mancuernas en Banco', 'Copa de Tríceps con Mancuerna'],
+    cues: [
+      ['Postura', 'Manos al borde del banco, pies apoyados, hombros abajo y pecho abierto.'],
+      ['Recorrido', 'Flexiona los codos hacia atrás hasta ~90° y empuja sin encoger los hombros. El lastre es el chaleco o una mancuerna colgada del cinturón.'],
+      ['Error común', 'Bajar los hombros hacia las orejas o abrir los codos hacia los lados.']
+    ]
+  },
+  {
+    id: 'chain_curl',
+    name: 'Curl con Cadena Ligera',
+    group: 'Brazos',
+    equipment: 'dumbbell',
+    bilateral: true,
+    stepKg: 1,
+    sets: 3, minReps: 12, maxReps: 15, restSec: 60,
+    archetype: 'hammer_curl',
+    muscles: 'Bíceps • Braquial',
+    note: 'Opcional y ligero. La cadena no es carga: anota solo la mancuerna si la usas.',
+    alternatives: ['Curl Martillo con Mancuernas', 'Curl Inclinado en Banco 45°'],
+    cues: [
+      ['Postura', 'De pie, cadena ligera en las manos (puedes añadir una mancuerna pequeña). Codos pegados al costado.'],
+      ['Recorrido', 'Flexiona sin balancear el torso y baja en 2 segundos. No cuentes el peso de la cadena.'],
+      ['Error común', 'Usar impulso de espalda o tratar la cadena como si fueran varios kilos de lastre.']
+    ]
+  },
+  {
+    id: 'walking_lunge',
+    name: 'Zancadas Caminando con Mancuernas',
+    group: 'Pierna / Glúteo',
+    equipment: 'dumbbell',
+    bilateral: true,
+    stepKg: 2,
+    sets: 3, minReps: 8, maxReps: 12, restSec: 90,
+    note: 'Por pierna',
+    archetype: 'lunge_rotation',
+    muscles: 'Glúteos • Cuádriceps • Equilibrio',
+    alternatives: ['Zancadas Atrás con Mancuernas', 'Sentadilla Búlgara en Banco'],
+    cues: [
+      ['Postura', 'Solo en el pasillo. Mancuernas a los costados, torso alto y pasos largos pero controlados.'],
+      ['Recorrido', 'Avanza bajando la rodilla de atrás cerca del suelo y empuja con el talón delantero para el siguiente paso.'],
+      ['Error común', 'Pasos cortos que cargan la rodilla o mirar los pies perdiendo la postura.']
+    ]
+  },
+  {
+    id: 'farmer_carry',
+    name: 'Paseo del Granjero con Mancuernas',
+    group: 'Pierna / Glúteo',
+    equipment: 'dumbbell',
+    bilateral: true,
+    stepKg: 2,
+    sets: 3, minReps: 20, maxReps: 40, restSec: 75,
+    note: 'Pasos',
+    archetype: 'rdl',
+    muscles: 'Agarre • Trapecio • Core • Cadera',
+    alternatives: ['Sentadilla Goblet Talones Elevados'],
+    cues: [
+      ['Postura', 'Solo en el pasillo. Mancuernas pesadas a los costados, hombros abajo y costillas firmes.'],
+      ['Recorrido', 'Camina con pasos cortos y estables sin dejar que las mancuernas se balanceen.'],
+      ['Error común', 'Encoger trapecios o inclinarte hacia un lado.']
+    ]
+  },
+  {
+    id: 'bear_crawl',
+    name: 'Gateo del Oso',
+    group: 'Core',
+    equipment: 'bodyweight',
+    bilateral: true,
+    stepKg: 0,
+    sets: 3, minReps: 10, maxReps: 20, restSec: 45,
+    note: 'Pasos',
+    archetype: 'pushup',
+    muscles: 'Core • Hombros • Cadera',
+    alternatives: ['Plancha Frontal'],
+    cues: [
+      ['Postura', 'Solo en el pasillo. Manos bajo hombros, rodillas a unos centímetros del suelo y espalda neutra.'],
+      ['Recorrido', 'Avanza mano y pie contrarios en pasos cortos sin balancear la cadera.'],
+      ['Error común', 'Subir el glúteo o dejar caer las rodillas en cada paso.']
     ]
   },
 
@@ -566,13 +814,66 @@ export const EXERCISE_CATALOG = [
   }
 ];
 
+const HALLWAY_IDS = new Set(['walking_lunge', 'farmer_carry', 'bear_crawl']);
+const OVERHEAD_IDS = new Set(['pullup', 'chinup', 'overhead_press', 'scapular_hang', 'band_pulldown']);
+const DECLINE_IDS = new Set(['decline_press', 'decline_fly', 'decline_crunch', 'decline_french_press']);
+const BAR_IDS = new Set(['pullup', 'chinup', 'face_pull', 'band_tricep', 'scapular_hang', 'band_pulldown']);
+const BELT_IDS = new Set(['chain_curl']);
+const BENCH_IDS = new Set([
+  'incline_press', 'flat_press', 'decline_press', 'incline_fly', 'decline_fly',
+  'chest_row', 'one_arm_row', 'overhead_press', 'rear_delt', 'bulgarian',
+  'hip_thrust', 'incline_curl', 'french_press', 'decline_french_press',
+  'decline_crunch', 'db_pullover', 'calf_raise_seated', 'bench_dip'
+]);
+const COMPOUND_IDS = new Set([
+  'incline_press', 'flat_press', 'decline_press', 'pushup', 'pullup', 'chinup',
+  'chest_row', 'one_arm_row', 'overhead_press', 'bulgarian', 'goblet_squat',
+  'rdl', 'hip_thrust', 'lunge_rotation', 'walking_lunge', 'bench_dip',
+  'band_pulldown', 'band_row', 'farmer_carry'
+]);
+
+for (const item of EXERCISE_CATALOG) {
+  if (HALLWAY_IDS.has(item.id)) item.spaceNeed = 'hallway';
+  else if (OVERHEAD_IDS.has(item.id)) item.spaceNeed = 'overhead';
+  else item.spaceNeed = 'compact';
+
+  if (item.group === 'Calentamiento') item.role = 'warmup';
+  else item.role = COMPOUND_IDS.has(item.id) ? 'compound' : 'isolation';
+
+  item.needs = {
+    bench: BENCH_IDS.has(item.id),
+    decline: DECLINE_IDS.has(item.id),
+    bar: BAR_IDS.has(item.id),
+    bands: item.equipment === 'band',
+    belt: BELT_IDS.has(item.id),
+    dumbbell: item.equipment === 'dumbbell',
+    hallway: item.spaceNeed === 'hallway'
+  };
+}
+
 export const CATALOG_BY_NAME = new Map(
   EXERCISE_CATALOG.map((item) => [item.name.toLowerCase(), item])
 );
 
-export const CATALOG_BY_ARCHETYPE = new Map(
-  EXERCISE_CATALOG.map((item) => [item.archetype, item])
-);
+export const CATALOG_BY_ARCHETYPE = new Map();
+for (const item of EXERCISE_CATALOG) {
+  if (!CATALOG_BY_ARCHETYPE.has(item.archetype)) CATALOG_BY_ARCHETYPE.set(item.archetype, item);
+}
+
+const CATALOG_BY_ID = new Map(EXERCISE_CATALOG.map((item) => [item.id, item]));
+
+export function getExerciseRole(exercise) {
+  const name = String(exercise?.name || exercise || '').toLowerCase();
+  const cat = CATALOG_BY_NAME.get(name);
+  if (cat?.role) return cat.role;
+  if (/plancha|pallof|crunch|curl|apertura|gemelo|pájaro|pajaro|face pull|patada|copa|francés|frances|elevacion lateral|elevación lateral/.test(name)) {
+    return 'isolation';
+  }
+  if (/press|dominada|remo|sentadilla|zancada|peso muerto|hip thrust|búlgara|bulgara|fondo|jalón|jalon|granjero/.test(name)) {
+    return 'compound';
+  }
+  return 'isolation';
+}
 
 /**
  * Resuelve cualquier nombre de ejercicio, calentamiento o alternativa hacia
@@ -605,12 +906,23 @@ export function resolveExerciseGuide(name) {
     return byArch('flat_press');
   }
 
+  const byId = (id) => CATALOG_BY_ID.get(id);
+
   // Core / Abdomen
+  if (n.includes('pallof')) return byId('pallof_press');
+  if (n.includes('plancha lateral')) return byId('side_plank');
+  if (n.includes('plancha')) return byId('front_plank');
+  if (n.includes('gateo') || n.includes('del oso')) return byId('bear_crawl');
   if (n.includes('crunch') || n.includes('abdom')) return byArch('decline_crunch');
 
   // Pierna / glúteo (antes que curl para no confundir curl femoral con bíceps!)
+  if (n.includes('gemelo') || n.includes('pantorrilla')) {
+    return n.includes('sentado') ? byId('calf_raise_seated') : byId('calf_raise_stand');
+  }
+  if (n.includes('granjero')) return byId('farmer_carry');
   if (n.includes('femoral')) return byArch('leg_curl_band');
   if (n.includes('búlgara') || n.includes('bulgara')) return byArch('bulgarian');
+  if (n.includes('caminando')) return byId('walking_lunge');
   if (n.includes('zancada') || n.includes('desplante') || n.includes('tobillo')) return byArch('lunge_rotation');
   if (n.includes('puente') && (n.includes('glúteo') || n.includes('gluteo'))) return byArch('glute_bridge');
   if (n.includes('hip thrust') || n.includes('glúteo') || n.includes('gluteo')) return byArch('hip_thrust');
@@ -618,6 +930,8 @@ export function resolveExerciseGuide(name) {
   if (n.includes('sentadilla') || n.includes('goblet')) return byArch('goblet_squat');
 
   // Empuje pecho / hombro (respetar variantes declinadas!)
+  if (n.includes('pullover')) return byId('db_pullover');
+  if (n.includes('fondo')) return byId('bench_dip');
   if (n.includes('flexion') || n.includes('lagartija')) return byArch('pushup');
   if (n.includes('declinad') && (n.includes('francés') || n.includes('frances'))) return byArch('decline_french_press');
   if (n.includes('declinad') && n.includes('apertura')) return byArch('decline_fly');
@@ -629,17 +943,21 @@ export function resolveExerciseGuide(name) {
   if (n.includes('apertura')) return byArch('incline_fly');
 
   // Tracción espalda / hombro posterior
+  if (n.includes('jalón') || n.includes('jalon') || n.includes('pulldown')) return byId('band_pulldown');
+  if (n.includes('remo con banda')) return byId('band_row');
   if (n.includes('supina')) return byArch('chinup');
   if (n.includes('dominada')) return byArch('pullup');
   if (n.includes('serrucho') || (n.includes('un brazo') && n.includes('remo'))) return byArch('one_arm_row');
   if (n.includes('remo')) return byArch('chest_row');
   if (n.includes('lateral')) return byArch('lateral_raise');
+  if (n.includes('face pull') && n.includes('sin barra')) return byId('band_face_pull_free');
   if (n.includes('face pull') || n.includes('rotación externa') || n.includes('rotacion externa') || n.includes('pull-apart') || n.includes('escapular')) {
     return byArch('face_pull');
   }
   if (n.includes('pájaro') || n.includes('pajaro')) return byArch('rear_delt');
 
   // Brazos
+  if (n.includes('cadena')) return byId('chain_curl');
   if (n.includes('patada') && (n.includes('tríceps') || n.includes('triceps'))) return byArch('tricep_kickback');
   if (n.includes('copa') || n.includes('sobre cabeza')) return byArch('overhead_tricep');
   if (n.includes('francés') || n.includes('frances')) return byArch('french_press');

@@ -1,25 +1,48 @@
 /**
- * AlphaHome — Estado Global, Persistencia Local y Migración Retrocompatible (v1 -> v2)
+ * AlphaHome — Estado Global y Persistencia (misma clave alphahome_state_v1)
  *
- * Mantiene la misma clave STORAGE_KEY ('alphahome_state_v1') para que usuarios
- * existentes conserven 100% de su historial, rutinas y registros de peso sin perder nada,
- * mientras que dispositivos nuevos arrancan con el onboarding personalizable.
+ * Migración v2 → v3 es solo aditiva: historial, rutinas, equipo, peso y ajustes
+ * que ya existían se conservan. Los campos nuevos (espacio, cinturón, declinado,
+ * objetivo, nivel, vuelta al entrenamiento) reciben valores por defecto.
  */
 
-import { ROUTINE_TEMPLATES, getTemplateById } from './data/templates.js';
+import { ROUTINE_TEMPLATES, getTemplateById, applyGoalRepRanges } from './data/templates.js';
 import { CATALOG_BY_NAME } from './data/catalog.js';
+import { planRoutineAdaptation } from './engine/adapt.js';
 import { getThemeInfo, showToast } from './utils.js';
 
 export const STORAGE_KEY = 'alphahome_state_v1';
+export const SCHEMA_VERSION = 3;
 
+const GOALS = ['hypertrophy', 'strength', 'glute', 'general'];
+const LEVELS = ['beginner', 'intermediate', 'advanced'];
+
+export function getDefaultSpace() {
+  return {
+    hasRoom: true,
+    roomWidthM: 0,
+    roomLengthM: 0,
+    hasHallway: false,
+    hallwayLengthM: 0,
+    hallwayWidthM: 0
+  };
+}
+
+/**
+ * Equipo neutro para una instalación nueva. No asume la mancuerna de 24 kg,
+ * la barra ni el chaleco de ningún usuario concreto.
+ */
 export function getDefaultEquipment() {
   return {
-    maxDumbbellKg: 24,
-    dumbbellStepKg: 2,
-    hasBench: true,
-    hasBands: true,
-    hasPullupBar: true,
-    hasVest: true,
+    maxDumbbellKg: 12,
+    dumbbellStepKg: 1,
+    hasBench: false,
+    hasDeclineBench: false,
+    bandCount: 0,
+    hasBands: false,
+    hasPullupBar: false,
+    hasWeightBelt: false,
+    hasVest: false,
     vestKg: 10
   };
 }
@@ -28,18 +51,22 @@ export function getDefaultProfile(onboardingCompleted = false) {
   return {
     name: '',
     theme: 'cyan',
-    onboardingCompleted
+    onboardingCompleted,
+    goal: 'general',
+    level: 'beginner',
+    daysPerWeek: 4
   };
 }
 
 export function getDefaultState(isFreshInstall = true) {
   return {
-    schemaVersion: 2,
+    schemaVersion: SCHEMA_VERSION,
     profile: getDefaultProfile(!isFreshInstall),
     equipment: getDefaultEquipment(),
+    space: getDefaultSpace(),
     routines: getTemplateById('alphahome_4d').build(),
     activeWorkout: null,
-    activeRest: null, // { endTime, totalSec, exerciseName } — persiste al recargar PWA
+    activeRest: null,
     history: [],
     bodyMetrics: {
       heightMeters: 1.70,
@@ -47,6 +74,8 @@ export function getDefaultState(isFreshInstall = true) {
     },
     settings: {
       readaptationMode: true,
+      returningFromBreak: false,
+      returnBlockStartedAt: null,
       autoRest: true,
       soundEnabled: true,
       vibrationEnabled: true,
@@ -56,9 +85,89 @@ export function getDefaultState(isFreshInstall = true) {
     ui: {
       activeTab: 'train',
       selectedProgressExercise: null,
-      selectedProgressMetric: 'maxWeight'
+      selectedProgressMetric: 'maxWeight',
+      dismissedAdaptKey: ''
     }
   };
+}
+
+function clampNum(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+function normalizeStepKg(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  const clamped = Math.max(0.5, Math.min(5, n));
+  return Math.round(clamped * 2) / 2;
+}
+
+function normalizeDim(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.round(Math.min(30, n) * 10) / 10;
+}
+
+export function normalizeSpace(raw) {
+  const d = getDefaultSpace();
+  const s = raw && typeof raw === 'object' ? raw : {};
+  return {
+    hasRoom: typeof s.hasRoom === 'boolean' ? s.hasRoom : d.hasRoom,
+    roomWidthM: normalizeDim(s.roomWidthM),
+    roomLengthM: normalizeDim(s.roomLengthM),
+    hasHallway: typeof s.hasHallway === 'boolean' ? s.hasHallway : false,
+    hallwayLengthM: normalizeDim(s.hallwayLengthM),
+    hallwayWidthM: normalizeDim(s.hallwayWidthM)
+  };
+}
+
+export function normalizeEquipment(rawEq, isExistingUser = true) {
+  const raw = rawEq && typeof rawEq === 'object' ? rawEq : {};
+  const neutral = getDefaultEquipment();
+  const hasBench = typeof raw.hasBench === 'boolean' ? raw.hasBench : (isExistingUser ? true : neutral.hasBench);
+  const hasPullupBar = typeof raw.hasPullupBar === 'boolean' ? raw.hasPullupBar : (isExistingUser ? true : neutral.hasPullupBar);
+  const hasVest = typeof raw.hasVest === 'boolean' ? raw.hasVest : (isExistingUser ? true : neutral.hasVest);
+
+  let bandCount;
+  if (Number.isFinite(Number(raw.bandCount))) {
+    bandCount = Math.max(0, Math.min(12, Math.round(Number(raw.bandCount))));
+  } else if (typeof raw.hasBands === 'boolean') {
+    bandCount = raw.hasBands ? 1 : 0;
+  } else {
+    bandCount = isExistingUser ? 1 : 0;
+  }
+
+  let hasDeclineBench = typeof raw.hasDeclineBench === 'boolean' ? raw.hasDeclineBench : hasBench;
+  if (!hasBench) hasDeclineBench = false;
+
+  return {
+    maxDumbbellKg: clampNum(raw.maxDumbbellKg, 2, 80, isExistingUser ? 24 : neutral.maxDumbbellKg),
+    dumbbellStepKg: normalizeStepKg(raw.dumbbellStepKg, isExistingUser ? 2 : neutral.dumbbellStepKg),
+    hasBench,
+    hasDeclineBench,
+    bandCount,
+    hasBands: bandCount > 0,
+    hasPullupBar,
+    hasWeightBelt: typeof raw.hasWeightBelt === 'boolean' ? raw.hasWeightBelt : false,
+    hasVest,
+    vestKg: clampNum(raw.vestKg, 1, 40, 10)
+  };
+}
+
+function normalizeGoal(value, fallback) {
+  return GOALS.includes(value) ? value : fallback;
+}
+
+function normalizeLevel(value, fallback) {
+  return LEVELS.includes(value) ? value : fallback;
+}
+
+function normalizeDays(value, routines) {
+  const n = Number(value);
+  if (n === 3 || n === 4) return n;
+  return Array.isArray(routines) && routines.length === 3 ? 3 : 4;
 }
 
 function normalizeExercise(ex) {
@@ -102,7 +211,7 @@ function normalizeRoutines(rawRoutines, fallbackRoutines) {
 }
 
 /**
- * Normaliza y migra cualquier payload (v1, v2 o respaldo importado) a estado v2 válido.
+ * Normaliza v1, v2, v3 o un respaldo importado. No borra history ni reescribe la rutina guardada.
  */
 export function normalizeState(parsed, { isExistingUser = true } = {}) {
   const def = getDefaultState(!isExistingUser);
@@ -112,7 +221,6 @@ export function normalizeState(parsed, { isExistingUser = true } = {}) {
   const loadedTab = parsed.ui && validTabs.includes(parsed.ui.activeTab) ? parsed.ui.activeTab : 'train';
 
   const rawProfile = parsed.profile || {};
-  // Si el estado ya existía en v1 (sin campo profile), no forzamos el onboarding inicial
   const onboardingCompleted = typeof rawProfile.onboardingCompleted === 'boolean'
     ? rawProfile.onboardingCompleted
     : isExistingUser;
@@ -120,19 +228,14 @@ export function normalizeState(parsed, { isExistingUser = true } = {}) {
   const profile = {
     name: String(rawProfile.name || '').trim().slice(0, 32),
     theme: getThemeInfo(rawProfile.theme).id,
-    onboardingCompleted
+    onboardingCompleted,
+    goal: normalizeGoal(rawProfile.goal, 'general'),
+    level: normalizeLevel(rawProfile.level, isExistingUser ? 'intermediate' : 'beginner'),
+    daysPerWeek: normalizeDays(rawProfile.daysPerWeek, parsed.routines)
   };
 
-  const rawEq = parsed.equipment || {};
-  const equipment = {
-    maxDumbbellKg: Math.max(2, Math.min(80, Number(rawEq.maxDumbbellKg) || 24)),
-    dumbbellStepKg: Math.max(0.5, Math.min(5, Number(rawEq.dumbbellStepKg) || 2)),
-    hasBench: typeof rawEq.hasBench === 'boolean' ? rawEq.hasBench : true,
-    hasBands: typeof rawEq.hasBands === 'boolean' ? rawEq.hasBands : true,
-    hasPullupBar: typeof rawEq.hasPullupBar === 'boolean' ? rawEq.hasPullupBar : true,
-    hasVest: typeof rawEq.hasVest === 'boolean' ? rawEq.hasVest : true,
-    vestKg: Math.max(1, Math.min(40, Number(rawEq.vestKg) || 10))
-  };
+  const equipment = normalizeEquipment(parsed.equipment, isExistingUser);
+  const space = normalizeSpace(parsed.space || parsed.equipment?.space);
 
   const loadedBodyMetrics = parsed.bodyMetrics && Array.isArray(parsed.bodyMetrics.logs)
     ? {
@@ -143,7 +246,6 @@ export function normalizeState(parsed, { isExistingUser = true } = {}) {
 
   const mergedRoutines = normalizeRoutines(parsed.routines, def.routines);
 
-  // Asegurar metadatos en activeWorkout si existía en v1
   let activeWorkout = parsed.activeWorkout || null;
   if (activeWorkout && Array.isArray(activeWorkout.exercises)) {
     activeWorkout = {
@@ -168,17 +270,37 @@ export function normalizeState(parsed, { isExistingUser = true } = {}) {
     };
   }
 
+  const rawSettings = parsed.settings || {};
+  const settings = {
+    ...def.settings,
+    ...rawSettings,
+    readaptationMode: typeof rawSettings.readaptationMode === 'boolean'
+      ? rawSettings.readaptationMode
+      : def.settings.readaptationMode,
+    returningFromBreak: rawSettings.returningFromBreak === true,
+    returnBlockStartedAt: Number(rawSettings.returnBlockStartedAt) > 0
+      ? Number(rawSettings.returnBlockStartedAt)
+      : null,
+    sessionGoalMin: clampNum(rawSettings.sessionGoalMin, 20, 180, def.settings.sessionGoalMin)
+  };
+
   return {
-    schemaVersion: 2,
+    schemaVersion: SCHEMA_VERSION,
     profile,
     equipment,
+    space,
     routines: mergedRoutines,
     activeWorkout,
     activeRest,
     history: Array.isArray(parsed.history) ? parsed.history : [],
     bodyMetrics: loadedBodyMetrics,
-    settings: { ...def.settings, ...(parsed.settings || {}) },
-    ui: { ...def.ui, ...(parsed.ui || {}), activeTab: loadedTab }
+    settings,
+    ui: {
+      ...def.ui,
+      ...(parsed.ui || {}),
+      activeTab: loadedTab,
+      dismissedAdaptKey: String(parsed.ui?.dismissedAdaptKey || '')
+    }
   };
 }
 
@@ -214,10 +336,15 @@ export function saveState() {
 
 export function applyRoutineTemplate(templateId) {
   const tpl = getTemplateById(templateId);
-  const built = tpl.build();
-  // Ajustar stepKg a la granularidad configurada en equipo si es menor
-  const userStep = state.equipment?.dumbbellStepKg || 2;
-  state.routines = built.map((day) => ({
+  const built = tpl.build({
+    equipment: state.equipment,
+    space: state.space,
+    profile: state.profile
+  });
+  const adapted = planRoutineAdaptation(built, state.equipment, state.space).routines;
+  const goaled = applyGoalRepRanges(adapted, state.profile?.goal);
+  const userStep = state.equipment?.dumbbellStepKg || 1;
+  state.routines = goaled.map((day) => ({
     ...day,
     exercises: day.exercises.map((ex) => ({
       ...ex,
@@ -228,9 +355,6 @@ export function applyRoutineTemplate(templateId) {
   return tpl;
 }
 
-// ---------------------------------------------------------------------------
-// Exportación / Importación de Respaldo Completo y Rutinas Compartibles
-// ---------------------------------------------------------------------------
 export function downloadJsonFile(payload, filename) {
   const dataStr = JSON.stringify(payload, null, 2);
   const blob = new Blob([dataStr], { type: 'application/json' });
@@ -251,12 +375,93 @@ export function exportFullBackup() {
 export function exportRoutinesOnly() {
   const payload = {
     type: 'alphahome_routines',
-    version: 2,
+    version: SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     author: state.profile?.name || 'AlphaHome',
     routines: state.routines
   };
   downloadJsonFile(payload, `alphahome_rutina_${new Date().toISOString().slice(0, 10)}.json`);
+}
+
+export function buildSetupPayload(source = state) {
+  return {
+    type: 'alphahome_setup',
+    version: SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    author: source.profile?.name || 'AlphaHome',
+    routines: source.routines,
+    config: {
+      equipment: source.equipment,
+      space: source.space,
+      goal: source.profile?.goal || 'general',
+      level: source.profile?.level || 'intermediate',
+      daysPerWeek: source.profile?.daysPerWeek === 3 ? 3 : 4,
+      sessionGoalMin: source.settings?.sessionGoalMin || 60
+    }
+  };
+}
+
+export function exportSetup() {
+  downloadJsonFile(buildSetupPayload(state), `alphahome_config_${new Date().toISOString().slice(0, 10)}.json`);
+}
+
+export function classifyImport(parsed) {
+  if (Array.isArray(parsed)) return 'routines';
+  if (!parsed || typeof parsed !== 'object') return 'invalid';
+  if (parsed.type === 'alphahome_setup') return 'setup';
+  if (parsed.type === 'alphahome_routines') return 'routines';
+  if (Array.isArray(parsed.routines) && (
+    parsed.schemaVersion || parsed.history || parsed.bodyMetrics || parsed.activeWorkout || parsed.profile
+  )) {
+    return 'backup';
+  }
+  if (Array.isArray(parsed.routines)) return 'routines';
+  return 'invalid';
+}
+
+/**
+ * Importa una rutina compartida o una rutina + configuración.
+ * Nunca reemplaza history, bodyMetrics ni la sesión activa.
+ */
+export function applySharedPayload(current, payload, mode) {
+  const base = normalizeState(current, { isExistingUser: true });
+  const incomingRoutines = Array.isArray(payload) ? payload : payload?.routines;
+  const routines = normalizeRoutines(incomingRoutines, base.routines);
+  const next = {
+    ...base,
+    routines,
+    history: base.history,
+    bodyMetrics: base.bodyMetrics,
+    activeWorkout: base.activeWorkout,
+    activeRest: base.activeRest
+  };
+
+  if (mode === 'setup') {
+    const cfg = payload?.config || {};
+    next.equipment = normalizeEquipment(
+      { ...base.equipment, ...(cfg.equipment || {}) },
+      true
+    );
+    next.space = normalizeSpace({ ...base.space, ...(cfg.space || {}) });
+    next.profile = {
+      ...base.profile,
+      goal: normalizeGoal(cfg.goal, base.profile.goal),
+      level: normalizeLevel(cfg.level, base.profile.level),
+      daysPerWeek: cfg.daysPerWeek === 3 || cfg.daysPerWeek === 4
+        ? cfg.daysPerWeek
+        : base.profile.daysPerWeek
+    };
+    if (cfg.sessionGoalMin != null) {
+      next.settings = {
+        ...base.settings,
+        sessionGoalMin: clampNum(cfg.sessionGoalMin, 20, 180, base.settings.sessionGoalMin)
+      };
+    }
+  }
+
+  next.history = base.history;
+  next.bodyMetrics = base.bodyMetrics;
+  return next;
 }
 
 export function parseImportedRoutines(text) {

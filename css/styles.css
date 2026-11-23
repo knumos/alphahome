@@ -766,11 +766,11 @@ a {
 
 /* ---- Plantillas y Onboarding ---- */
 .step-dots {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
   gap: 6px;
 }
 .step-dot {
+  flex: 1;
   height: 4px;
   border-radius: 999px;
   background: var(--surface-700);

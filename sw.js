@@ -1,6 +1,6 @@
 /* AlphaHome — Service Worker v2 (100% offline sin dependencia de CDN de estilos)
    Rutas relativas para funcionar en GitHub Pages bajo /alphahome/. */
-const CACHE_VERSION = 'alphahome-v3';
+const CACHE_VERSION = 'alphahome-v4';
 
 const SHELL = [
   './',

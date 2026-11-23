@@ -3,7 +3,8 @@
  */
 
 import {
-  state, saveState, replaceState, normalizeState, getDefaultState, exportFullBackup
+  state, saveState, replaceState, normalizeState, getDefaultState, exportFullBackup,
+  exportRoutinesOnly, exportSetup, classifyImport, applySharedPayload
 } from './state.js';
 import {
   applyTheme, escapeHtml, escapeAttr, formatTime, getTodayDateString,
@@ -14,8 +15,10 @@ import {
 } from './utils.js';
 import {
   calculateRecommendation, getLastExerciseLog, getCurrentBodyWeight,
-  computeWorkoutVolume, getVestWeightKg
+  computeWorkoutVolume, getVestWeightKg, getReturnBlock, advanceReturnBlock,
+  getWorkingSetCount, describeReturnBlock
 } from './engine/progression.js';
+import { planRoutineAdaptation, adaptationKey, movementFits } from './engine/adapt.js';
 import {
   tutTimer, getSessionElapsedSeconds, startSessionTicker, stopSessionTicker,
   updateSessionTimerUI, startRestTimer, restoreRestTimer, adjustRestTimer,
@@ -26,7 +29,7 @@ import { renderProgressView } from './ui/progressView.js';
 import { renderWeightView } from './ui/weightView.js';
 import { renderSettingsView } from './ui/settingsView.js';
 import { openOnboardingWizard } from './ui/onboarding.js';
-import { openRoutineManagerModal, openDayEditorModal, openTemplatePickerModal } from './ui/routineEditor.js';
+import { openRoutineManagerModal, openDayEditorModal, openTemplatePickerModal, openShareImportModal } from './ui/routineEditor.js';
 
 let deferredInstallPrompt = null;
 let swRegistration = null;
@@ -79,13 +82,23 @@ function renderHeader() {
     `;
     updateSessionTimerUI(state);
   } else {
-    sub.textContent = state.settings.readaptationMode ? 'Modo Readaptación' : 'Modo Doble Progresión';
+    const block = getReturnBlock(state);
+    const copy = describeReturnBlock(block);
+    sub.textContent = copy ? copy.title : (state.settings.readaptationMode ? 'Modo Readaptación' : 'Modo Doble Progresión');
     barWrap.classList.add('hidden');
-    right.innerHTML = `
-      <button type="button" class="btn btn--xs ${state.settings.readaptationMode ? 'btn--amber-soft' : 'btn--emerald-soft'}" data-action="toggle-readapt">
-        ${state.settings.readaptationMode ? '⚡ Readaptación' : '📈 Progresión'}
-      </button>
-    `;
+    if (block.active) {
+      right.innerHTML = `
+        <button type="button" class="btn btn--xs btn--amber-soft" data-action="end-return-block">
+          Vuelta S${block.week}
+        </button>
+      `;
+    } else {
+      right.innerHTML = `
+        <button type="button" class="btn btn--xs ${state.settings.readaptationMode ? 'btn--amber-soft' : 'btn--emerald-soft'}" data-action="toggle-readapt">
+          ${state.settings.readaptationMode ? '⚡ Readaptación' : '📈 Progresión'}
+        </button>
+      `;
+    }
   }
 }
 
@@ -97,6 +110,11 @@ function renderNav() {
 }
 
 function render() {
+  const advance = advanceReturnBlock(state);
+  if (advance.changed) saveState();
+  if (advance.completed) {
+    showToast('Terminó el bloque de vuelta. Sigues con el plan completo y la doble progresión.', 'success');
+  }
   applyTheme(state.profile?.theme || 'cyan');
   renderHeader();
   renderNav();
@@ -140,26 +158,41 @@ function startWorkout(dayId) {
   const exercises = routine.exercises.map((ex) => {
     const rec = calculateRecommendation(ex, state);
     const last = getLastExerciseLog(ex.name, state);
+    const workingSets = getWorkingSetCount(ex, state);
     const setsArr = [];
-    for (let i = 0; i < ex.sets; i++) {
-      const prevSet = last && last.sets[i] ? last.sets[i] : null;
+    for (let i = 0; i < workingSets; i++) {
+      const prevSet = last && last.sets[i] ? last.sets[i] : (last && last.sets[0] ? last.sets[0] : null);
       // Check explícito (no truthy ||) para no perder el 0 en ejercicios sin peso externo
       const hasSuggested = rec.suggestedWeight !== '' && rec.suggestedWeight !== null && rec.suggestedWeight !== undefined;
       const initialWeight = hasSuggested
         ? rec.suggestedWeight
         : (prevSet && prevSet.weight !== undefined ? prevSet.weight : '');
+      const mods = {
+        vest: false,
+        band: false,
+        pause: false,
+        chain: false,
+        belt: false,
+        bandLevel: ex.equipment === 'band' ? 1 : 0,
+        ...(prevSet && prevSet.mods ? prevSet.mods : {})
+      };
+      if (rec.suggestedVest) mods.vest = true;
+      if (rec.suggestedBelt) mods.belt = true;
+      if (rec.suggestedBandLevel) {
+        mods.band = true;
+        mods.bandLevel = rec.suggestedBandLevel;
+      }
       setsArr.push({
         weight: initialWeight,
         reps: rec.suggestedReps || ex.minReps,
         rir: rec.suggestedRir,
         done: false,
-        mods: prevSet && prevSet.mods
-          ? { ...prevSet.mods }
-          : { vest: false, band: false, pause: false, chain: false }
+        mods
       });
     }
     return {
       ...JSON.parse(JSON.stringify(ex)),
+      plannedSets: ex.sets,
       sets: setsArr,
       tutSeconds: 0,
       sessionNote: ''
@@ -312,7 +345,7 @@ function openSwapExerciseModal(exIdx, context = 'active', dayId = null) {
     : state.routines.find((d) => d.id === dayId)?.exercises[exIdx];
   if (!ex) return;
 
-  const alts = ex.alternatives || [];
+  const alts = (ex.alternatives || []).filter((name) => movementFits(name, state.equipment, state.space));
   openModal(`
     <div class="modal-header">
       <h3 class="modal-title">Cambiar Ejercicio</h3>
@@ -516,7 +549,11 @@ function openFinishWorkoutModal() {
       dayName: aw.dayName,
       durationSeconds: elapsed,
       totalVolume: volume,
-      mode: state.settings.readaptationMode ? 'Readaptación' : 'Progresión',
+      mode: (() => {
+        const block = getReturnBlock(state);
+        if (block.active) return `Vuelta S${block.week}`;
+        return state.settings.readaptationMode ? 'Readaptación' : 'Progresión';
+      })(),
       exercises: aw.exercises.map((ex) => ({
         name: ex.name,
         equipment: ex.equipment,
@@ -590,6 +627,54 @@ function openEditHeightModal() {
     showToast(`Estatura actualizada a ${state.bodyMetrics.heightMeters.toFixed(2)} m`, 'success');
     render();
   });
+}
+
+function openAdaptOffer(plan) {
+  const changes = plan?.changes || [];
+  if (!changes.length) {
+    showToast('Tu rutina ya cabe en este equipo y espacio.', 'info');
+    return;
+  }
+  const items = changes.slice(0, 12).map((c) => {
+    const action = c.to ? `${c.from} → ${c.to}` : `Quitar ${c.from}`;
+    return `<li class="text-xs text-soft">${escapeHtml(c.dayName || 'Día')}: ${escapeHtml(action)} <span class="text-muted">(${escapeHtml(c.reason || '')})</span></li>`;
+  }).join('');
+  const extra = changes.length > 12 ? `<p class="text-2xs text-muted mt-2">Y ${changes.length - 12} cambios más.</p>` : '';
+  openModal(`
+    <h3 class="modal-title mb-2">¿Adaptar la rutina?</h3>
+    <p class="text-xs text-muted mb-3">Solo se cambia la rutina activa. Tu historial se queda igual. Si cancelas, el equipo nuevo se guarda y los ejercicios siguen como están.</p>
+    <ul class="stack-1 mb-4" style="padding-left:16px">${items}</ul>
+    ${extra}
+    <div class="row gap-2 mt-4">
+      <button type="button" id="adapt-skip" class="btn btn--surface flex-1">Dejar la rutina</button>
+      <button type="button" id="adapt-apply" class="btn btn--primary flex-1">Adaptar</button>
+    </div>
+  `);
+  document.getElementById('adapt-skip')?.addEventListener('click', () => {
+    state.ui.dismissedAdaptKey = adaptationKey(changes);
+    saveState();
+    closeModal();
+  });
+  document.getElementById('adapt-apply')?.addEventListener('click', () => {
+    state.routines = plan.routines;
+    state.ui.dismissedAdaptKey = '';
+    saveState();
+    closeModal();
+    showToast('Rutina adaptada. El historial no se modificó.', 'success');
+    render();
+  });
+}
+
+function maybeOfferAdapt() {
+  const plan = planRoutineAdaptation(state.routines, state.equipment, state.space);
+  if (!plan.changes.length) return;
+  if (state.ui.dismissedAdaptKey === adaptationKey(plan.changes)) return;
+  openAdaptOffer(plan);
+}
+
+function afterOnboarding() {
+  render();
+  maybeOfferAdapt();
 }
 
 function openConfirmModal({ title, description, confirmLabel, onConfirm }) {
@@ -778,13 +863,27 @@ function bindEvents() {
         }
         break;
       }
+      case 'cycle-band': {
+        const exIdx = Number(target.dataset.exIdx);
+        const setIdx = Number(target.dataset.setIdx);
+        const count = Math.max(1, Number(target.dataset.bandCount) || 1);
+        const s = state.activeWorkout?.exercises[exIdx]?.sets[setIdx];
+        if (!s) break;
+        if (!s.mods) s.mods = {};
+        const current = Number(s.mods.bandLevel) || 1;
+        s.mods.bandLevel = current >= count ? 1 : current + 1;
+        s.mods.band = true;
+        saveState();
+        render();
+        break;
+      }
       case 'toggle-mod': {
         const exIdx = Number(target.dataset.exIdx);
         const setIdx = Number(target.dataset.setIdx);
         const modKey = target.dataset.modKey;
         const s = state.activeWorkout?.exercises[exIdx]?.sets[setIdx];
         if (!s) break;
-        if (!s.mods) s.mods = { vest: false, band: false, pause: false, chain: false };
+        if (!s.mods) s.mods = { vest: false, band: false, pause: false, chain: false, belt: false, bandLevel: 0 };
         s.mods[modKey] = !s.mods[modKey];
         saveState();
         target.classList.toggle('is-active', s.mods[modKey]);
@@ -802,7 +901,7 @@ function bindEvents() {
         curr.weight = prev.weight;
         curr.reps = prev.reps;
         curr.rir = prev.rir;
-        curr.mods = { ...(prev.mods || { vest: false, band: false, pause: false, chain: false }) };
+        curr.mods = { vest: false, band: false, pause: false, chain: false, belt: false, bandLevel: 0, ...(prev.mods || {}) };
         saveState();
         render();
         showToast(`Serie ${setIdx + 1} copiada desde S${setIdx}`, 'info');
@@ -887,22 +986,41 @@ function bindEvents() {
         break;
       }
       case 'reopen-onboarding':
-        openOnboardingWizard(render, { isReconfigure: true });
+        openOnboardingWizard(afterOnboarding, { isReconfigure: true });
         break;
       case 'save-profile': {
         const nameVal = document.getElementById('set-profile-name')?.value.trim().slice(0, 32) || '';
         const hVal = parseFloat(document.getElementById('set-height')?.value);
+        const minVal = Number(document.getElementById('set-session-min')?.value);
         if (isNaN(hVal) || hVal < 1.2 || hVal > 2.3) {
           showToast('Ingresa una estatura válida entre 1.20 y 2.30 m.', 'warning');
           break;
         }
         state.profile.name = nameVal;
         state.bodyMetrics.heightMeters = Math.round(hVal * 100) / 100;
+        if (Number.isFinite(minVal)) {
+          state.settings.sessionGoalMin = Math.max(20, Math.min(180, minVal));
+        }
         saveState();
         showToast('Perfil actualizado.', 'success');
         render();
         break;
       }
+      case 'set-goal':
+        state.profile.goal = target.dataset.goal;
+        saveState();
+        render();
+        break;
+      case 'set-level':
+        state.profile.level = target.dataset.level;
+        saveState();
+        render();
+        break;
+      case 'set-days':
+        state.profile.daysPerWeek = Number(target.dataset.days) === 3 ? 3 : 4;
+        saveState();
+        render();
+        break;
       case 'set-theme':
         state.profile.theme = target.dataset.themeId;
         saveState();
@@ -912,22 +1030,77 @@ function bindEvents() {
       case 'toggle-equipment': {
         const key = target.dataset.eqKey;
         state.equipment[key] = !state.equipment[key];
+        if (key === 'hasBench' && !state.equipment.hasBench) state.equipment.hasDeclineBench = false;
+        if (key === 'hasDeclineBench' && state.equipment.hasDeclineBench) state.equipment.hasBench = true;
+        saveState();
+        render();
+        break;
+      }
+      case 'toggle-space': {
+        const key = target.dataset.spaceKey;
+        if (!state.space) state.space = { hasRoom: true, roomWidthM: 0, roomLengthM: 0, hasHallway: false, hallwayLengthM: 0, hallwayWidthM: 0 };
+        state.space[key] = !state.space[key];
         saveState();
         render();
         break;
       }
       case 'save-equipment': {
-        const maxDb = Math.max(2, Math.min(80, Number(document.getElementById('set-maxdb')?.value) || 24));
-        const stepDb = Math.max(0.5, Math.min(5, Number(document.getElementById('set-stepdb')?.value) || 1));
+        const maxDb = Math.max(2, Math.min(80, Number(document.getElementById('set-maxdb')?.value) || state.equipment.maxDumbbellKg || 12));
+        const stepDb = Math.max(0.5, Math.min(5, Math.round((Number(document.getElementById('set-stepdb')?.value) || 1) * 2) / 2));
         const vestKg = Math.max(1, Math.min(40, Number(document.getElementById('set-vestkg')?.value) || state.equipment.vestKg || 10));
+        const bandCount = Math.max(0, Math.min(12, Math.round(Number(document.getElementById('set-bands')?.value) || 0)));
+        const dim = (id) => {
+          const n = Number(document.getElementById(id)?.value);
+          return Number.isFinite(n) && n > 0 ? Math.round(Math.min(30, n) * 10) / 10 : 0;
+        };
         state.equipment.maxDumbbellKg = maxDb;
         state.equipment.dumbbellStepKg = stepDb;
         state.equipment.vestKg = vestKg;
+        state.equipment.bandCount = bandCount;
+        state.equipment.hasBands = bandCount > 0;
+        state.space = {
+          ...(state.space || {}),
+          roomWidthM: dim('set-room-w'),
+          roomLengthM: dim('set-room-l'),
+          hallwayLengthM: dim('set-hall-l'),
+          hallwayWidthM: dim('set-hall-w')
+        };
         saveState();
-        showToast('Configuración de equipo guardada.', 'success');
+        showToast('Equipo y espacio guardados. La rutina no se modificó.', 'success');
+        render();
+        maybeOfferAdapt();
+        break;
+      }
+      case 'review-routine-fit': {
+        const plan = planRoutineAdaptation(state.routines, state.equipment, state.space);
+        openAdaptOffer(plan);
+        break;
+      }
+      case 'toggle-return-block': {
+        const on = !state.settings.returningFromBreak;
+        state.settings.returningFromBreak = on;
+        state.settings.readaptationMode = on ? true : state.settings.readaptationMode;
+        state.settings.returnBlockStartedAt = on ? Date.now() : state.settings.returnBlockStartedAt;
+        saveState();
+        showToast(on ? 'Bloque de vuelta iniciado. Semanas 1-2 con menos series y sin subir kilos.' : 'Bloque de vuelta desactivado.', 'info');
         render();
         break;
       }
+      case 'end-return-block':
+        state.settings.returningFromBreak = false;
+        state.settings.readaptationMode = false;
+        saveState();
+        showToast('Saliste del bloque de vuelta. El plan completo vuelve a aplicar.', 'info');
+        render();
+        break;
+      case 'export-routines':
+        exportRoutinesOnly();
+        showToast('Rutina descargada, sin historial.', 'success');
+        break;
+      case 'export-setup':
+        exportSetup();
+        showToast('Rutina y configuración descargadas, sin historial.', 'success');
+        break;
       case 'toggle-setting': {
         const key = target.dataset.key;
         state.settings[key] = !state.settings[key];
@@ -964,7 +1137,7 @@ function bindEvents() {
             syncWakeLock(null);
             showToast('Datos reiniciados.', 'info');
             render();
-            openOnboardingWizard(render);
+            openOnboardingWizard(afterOnboarding);
           }
         });
         break;
@@ -1007,17 +1180,24 @@ function bindEvents() {
       reader.onload = (ev) => {
         try {
           const parsed = JSON.parse(ev.target.result);
-          if (!parsed || !Array.isArray(parsed.routines)) throw new Error('Formato inválido');
-          stopTutTimer();
-          stopSessionTicker();
-          skipRestTimer(getState, saveState);
-          const next = normalizeState(parsed, { isExistingUser: true });
-          replaceState(next);
-          if (state.activeWorkout) startSessionTicker(getState);
-          restoreRestTimer(getState, saveState);
-          syncWakeLock(state.activeWorkout);
-          showToast('Respaldo importado correctamente.', 'success');
-          render();
+          const kind = classifyImport(parsed);
+          if (kind === 'invalid') throw new Error('Formato inválido');
+          if (kind === 'backup') {
+            stopTutTimer();
+            stopSessionTicker();
+            skipRestTimer(getState, saveState);
+            const next = normalizeState(parsed, { isExistingUser: true });
+            replaceState(next);
+            if (state.activeWorkout) startSessionTicker(getState);
+            restoreRestTimer(getState, saveState);
+            syncWakeLock(state.activeWorkout);
+            showToast('Respaldo importado. Historial del archivo restaurado.', 'success');
+            render();
+            return;
+          }
+          openShareImportModal(parsed, () => {
+            render();
+          });
         } catch {
           showToast('El archivo JSON no es válido.', 'error');
         }
@@ -1148,6 +1328,6 @@ window.addEventListener('DOMContentLoaded', () => {
   render();
 
   if (!state.profile?.onboardingCompleted) {
-    openOnboardingWizard(render);
+    openOnboardingWizard(afterOnboarding);
   }
 });
