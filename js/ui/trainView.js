@@ -5,7 +5,8 @@
  */
 
 import {
-  calculateRecommendation, getLastExerciseLog, getCurrentBodyWeight, getVestWeightKg
+  calculateRecommendation, getLastExerciseLog, getCurrentBodyWeight, getVestWeightKg,
+  getReturnBlock, describeReturnBlock
 } from '../engine/progression.js';
 import { escapeHtml, escapeAttr, formatDateShort, formatTime } from '../utils.js';
 
@@ -17,22 +18,28 @@ export function renderStartWorkoutView(state) {
   const suggestedDay = routines[nextDayIndex] || routines[0];
   const currentBW = getCurrentBodyWeight(state);
   const greetingName = state.profile?.name ? `Hola, ${state.profile.name}` : 'Listo para entrenar';
-  const isReadapt = Boolean(state.settings?.readaptationMode);
+  const block = getReturnBlock(state);
+  const returnCopy = describeReturnBlock(block);
+  const isReadapt = Boolean(state.settings?.readaptationMode) && !block.active;
 
   return `
     <div class="stack-4">
-      <div class="mode-banner ${isReadapt ? 'mode-banner--amber' : 'mode-banner--accent'}">
+      <div class="mode-banner ${returnCopy || isReadapt ? 'mode-banner--amber' : 'mode-banner--accent'}">
         <div class="min-w-0">
-          <p class="text-sm font-extrabold ${isReadapt ? 'text-amber' : 'text-accent'}">
-            ${isReadapt ? 'Modo Readaptación Activo' : 'Modo Doble Progresión Activo'}
+          <p class="text-sm font-extrabold ${returnCopy || isReadapt ? 'text-amber' : 'text-accent'}">
+            ${returnCopy ? returnCopy.title : (isReadapt ? 'Modo Readaptación Activo' : 'Modo Doble Progresión Activo')}
           </p>
           <p class="text-xs text-soft mt-1 leading-relaxed">
-            ${isReadapt
-              ? 'RIR objetivo 2-3 y cargas controladas para arrancar con técnica limpia sin agujetas extremas.'
-              : `Progresión automática adaptada a tu equipo (mancuernas hasta ${state.equipment?.maxDumbbellKg || 24} kg).`}
+            ${returnCopy
+              ? returnCopy.detail
+              : isReadapt
+                ? 'RIR objetivo 2-3 y cargas controladas para arrancar con técnica limpia.'
+                : `Progresión automática hasta ${state.equipment?.maxDumbbellKg || 12} kg por mancuerna, saltos de ${state.equipment?.dumbbellStepKg || 1} kg.`}
           </p>
         </div>
-        <button type="button" class="btn btn--surface btn--xs shrink-0" data-action="toggle-readapt">Cambiar</button>
+        <button type="button" class="btn btn--surface btn--xs shrink-0" data-action="${block.active ? 'end-return-block' : 'toggle-readapt'}">
+          ${block.active ? 'Salir' : 'Cambiar'}
+        </button>
       </div>
 
       ${suggestedDay ? `
@@ -127,9 +134,10 @@ function renderExerciseCard(ex, exIdx, state, tutTimer, partnerIdx = null) {
 
   const modDefs = [];
   if (state.equipment?.hasVest) modDefs.push({ key: 'vest', label: `Chaleco ${vestKg}kg` });
-  if (state.equipment?.hasBands !== false) modDefs.push({ key: 'band', label: 'Banda' });
+  if (state.equipment?.hasWeightBelt) modDefs.push({ key: 'belt', label: 'Cinturón + mancuerna' });
+  if (state.equipment?.hasBands || ex.equipment === 'band') modDefs.push({ key: 'band', label: 'Banda' });
   modDefs.push({ key: 'pause', label: 'Pausa 2s' });
-  if (state.equipment?.hasPullupBar) modDefs.push({ key: 'chain', label: 'Cadena' });
+  const bandCount = Math.max(1, Number(state.equipment?.bandCount) || 1);
 
   const weightLabel = ex.equipment === 'bodyweight'
     ? 'Lastre (kg)'
@@ -150,6 +158,7 @@ function renderExerciseCard(ex, exIdx, state, tutTimer, partnerIdx = null) {
               ${ex.note ? `<span class="text-2xs text-muted font-semibold">• ${escapeHtml(ex.note)}</span>` : ''}
             </div>
             <h3 class="text-base font-extrabold text-strong leading-snug">${escapeHtml(ex.name)}</h3>
+            ${ex.plannedSets && ex.sets.length < ex.plannedSets ? `<p class="text-2xs text-amber mt-1">Hoy ${ex.sets.length} de ${ex.plannedSets} series por el bloque de vuelta.</p>` : ''}
           </div>
 
           <div class="row gap-1.5 shrink-0">
@@ -173,7 +182,7 @@ function renderExerciseCard(ex, exIdx, state, tutTimer, partnerIdx = null) {
           </button>
           ${partnerIdx !== null ? `
             <button type="button" class="btn btn--surface btn--xs text-accent" data-action="jump-ex" data-target-idx="${partnerIdx}">
-              ${partnerIdx > exIdx ? 'Ir a B ↓' : 'Volver a A ↑'}
+              ${partnerIdx > exIdx ? 'Ir al par ↓' : 'Volver al par ↑'}
             </button>
           ` : ''}
         </div>
@@ -221,7 +230,7 @@ function renderExerciseCard(ex, exIdx, state, tutTimer, partnerIdx = null) {
                   <div class="stepper-field">
                     <button type="button" class="step-btn" data-action="step-set" data-ex-idx="${exIdx}" data-set-idx="${setIdx}" data-field="weight" data-delta="${-stepKg}" aria-label="Restar peso">−</button>
                     <input
-                      type="number" inputmode="decimal" step="0.5" min="0"
+                      type="number" inputmode="decimal" step="0.1" min="0"
                       value="${s.weight}"
                       placeholder="0"
                       data-set-input="${exIdx}:${setIdx}:weight"
@@ -275,6 +284,16 @@ function renderExerciseCard(ex, exIdx, state, tutTimer, partnerIdx = null) {
                       data-mod-key="${m.key}"
                     >${mods[m.key] ? '✓ ' : '+ '}${m.label}</button>
                   `).join('')}
+                  ${ex.equipment === 'band' ? `
+                    <button
+                      type="button"
+                      class="mod-chip ${mods.bandLevel ? 'is-active' : ''}"
+                      data-action="cycle-band"
+                      data-ex-idx="${exIdx}"
+                      data-set-idx="${setIdx}"
+                      data-band-count="${bandCount}"
+                    >Banda ${mods.bandLevel || 1}/${bandCount}</button>
+                  ` : ''}
                   ${setIdx > 0 ? `
                     <button
                       type="button"
@@ -355,10 +374,12 @@ export function renderActiveWorkoutView(state, tutTimer) {
   for (let i = 0; i < aw.exercises.length; i++) {
     const curr = aw.exercises[i];
     const next = aw.exercises[i + 1];
-    if (curr.superset === 'SUPERSERIE A' && next && next.superset === 'SUPERSERIE B') {
+    const samePair = curr.superset && next && next.superset === curr.superset;
+    const legacyPair = curr.superset === 'SUPERSERIE A' && next && next.superset === 'SUPERSERIE B';
+    if (samePair || legacyPair) {
       exerciseBlocks.push(`
         <div class="superset-group">
-          <div class="superset-group__label">⚡ SUPERSERIE — Alterna A y B con descanso corto entre ambos</div>
+          <div class="superset-group__label">⚡ ${escapeHtml(curr.superset)} — 15 s entre ejercicios y el descanso largo al cerrar el par</div>
           <div class="stack-3">
             ${renderExerciseCard(curr, i, state, tutTimer, i + 1)}
             ${renderExerciseCard(next, i + 1, state, tutTimer, i)}
@@ -373,7 +394,11 @@ export function renderActiveWorkoutView(state, tutTimer) {
 
   return `
     <div class="stack-4">
-      ${state.settings.readaptationMode ? `
+      ${describeReturnBlock(getReturnBlock(state)) ? `
+        <div class="mode-strip">
+          <span class="text-xs font-semibold text-amber">⚡ ${escapeHtml(describeReturnBlock(getReturnBlock(state)).detail)}</span>
+        </div>
+      ` : state.settings.readaptationMode ? `
         <div class="mode-strip">
           <span class="text-xs font-semibold text-amber">⚡ Readaptación activa: mantén RIR 2-3 hoy.</span>
           <button type="button" class="text-2xs font-bold text-amber underline" data-action="toggle-readapt">Desactivar</button>

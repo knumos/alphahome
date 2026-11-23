@@ -191,7 +191,9 @@ export function renderProgressView(state) {
                         ${(ex.sets || []).map((s, si) => {
                           const modTags = [];
                           if (s.mods?.vest) modTags.push(`+${vestKg}kg`);
-                          if (s.mods?.band) modTags.push('Banda');
+                          if (s.mods?.belt) modTags.push('Cinturón');
+                          if (s.mods?.bandLevel) modTags.push(`Banda ${s.mods.bandLevel}`);
+                          else if (s.mods?.band) modTags.push('Banda');
                           if (s.mods?.pause) modTags.push('Pausa');
                           if (s.mods?.chain) modTags.push('Cadena');
                           return `

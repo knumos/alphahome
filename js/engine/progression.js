@@ -1,13 +1,16 @@
 /**
  * AlphaHome — Motor de Progresión Inteligente, Métricas de Volumen y Peso Corporal
  *
- * Corrige todos los casos límite de v1:
- *  - Respeta el equipo personalizado (tope de mancuerna, incremento mínimo, chaleco opcional)
- *  - Detecta modificadores (chaleco/pausa/banda) en TODAS las series, no solo en la primera
- *  - Progresión dedicada para bandas (tensión/distancia/pausa, nunca "+1 kg")
- *  - Parseo seguro de RIR (sin NaN cuando falta)
- *  - Peso corporal real en promedio móvil de 7 días agrupado por fecha y regresión lineal temporal
+ * - Doble progresión dentro del tope de mancuerna y del salto configurado (0.5 o 1 kg).
+ * - Chaleco (mods.vest) suma el kg fijo del chaleco.
+ * - Cinturón (mods.belt): la carga añadida es la mancuerna colgada, nunca el peso de la cadena.
+ * - Bandas avanzan de banda en banda según bandCount.
+ * - El bloque de vuelta (returningFromBreak) baja series y RIR y no sube kilos.
  */
+
+import { getExerciseRole } from '../data/catalog.js';
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function getSortedWeightLogsDesc(state) {
   const logs = (state.bodyMetrics && Array.isArray(state.bodyMetrics.logs))
@@ -78,6 +81,83 @@ export function getVestWeightKg(state) {
   return Math.max(1, Number(state.equipment.vestKg) || 10);
 }
 
+function countSessionsSince(state, startedAt) {
+  return (state?.history || []).filter((session) => {
+    const t = new Date(session?.date).getTime();
+    return Number.isFinite(t) && t >= startedAt;
+  }).length;
+}
+
+/**
+ * Semanas 1-2: 2 series en básicos y aislamiento, RIR 3-4, sin subir carga.
+ * Semana 3: vuelve la 3.ª serie de básicos, RIR 2-3, todavía sin subir kilos.
+ * Semana 4+: plan completo, solo si ya pasaron 21 días y al menos dos microciclos.
+ */
+export function getReturnBlock(state, now = Date.now()) {
+  const settings = state?.settings || {};
+  if (!settings.returningFromBreak) {
+    return { active: false, completed: false, week: 0, phase: 'off', sessions: 0, startedAt: null, daysPerWeek: 4 };
+  }
+  const startedAt = Number(settings.returnBlockStartedAt) > 0 ? Number(settings.returnBlockStartedAt) : now;
+  const elapsed = Math.max(0, now - startedAt);
+  const timeWeek = Math.floor(elapsed / WEEK_MS) + 1;
+  const daysPerWeek = state?.profile?.daysPerWeek === 3 ? 3 : 4;
+  const sessions = countSessionsSince(state, startedAt);
+  const base = { sessions, startedAt, timeWeek, daysPerWeek, completed: false };
+
+  if (timeWeek >= 4 && sessions >= daysPerWeek * 2) {
+    return { ...base, active: false, completed: true, week: 4, phase: 'full' };
+  }
+  if (timeWeek >= 3 && sessions >= daysPerWeek) {
+    return { ...base, active: true, week: 3, phase: 'week3', targetRir: '2-3', suggestedRir: 3 };
+  }
+  const week = timeWeek >= 2 && sessions >= 1 ? 2 : 1;
+  return { ...base, active: true, week, phase: 'weeks12', targetRir: '3-4', suggestedRir: 4 };
+}
+
+export function describeReturnBlock(block) {
+  if (!block?.active) return null;
+  if (block.phase === 'week3') {
+    return {
+      title: 'Vuelta al entrenamiento · Semana 3',
+      detail: 'Regresa la 3.ª serie en los básicos. RIR 2-3 y todavía sin subir kilos.'
+    };
+  }
+  return {
+    title: `Vuelta al entrenamiento · Semana ${block.week}`,
+    detail: `Básicos y aislamiento a 1-2 series, RIR 3-4, sin subir carga. ${block.sessions} sesión${block.sessions === 1 ? '' : 'es'} en el bloque.`
+  };
+}
+
+/** Persiste el inicio y el fin del bloque. `completed` solo cuando ya toca el plan completo. */
+export function advanceReturnBlock(state, now = Date.now()) {
+  const result = { changed: false, completed: false };
+  if (!state?.settings) return result;
+  if (state.settings.returningFromBreak && !(Number(state.settings.returnBlockStartedAt) > 0)) {
+    state.settings.returnBlockStartedAt = now;
+    result.changed = true;
+  }
+  const block = getReturnBlock(state, now);
+  if (block.completed && state.settings.returningFromBreak) {
+    state.settings.returningFromBreak = false;
+    state.settings.readaptationMode = false;
+    result.changed = true;
+    result.completed = true;
+  }
+  return result;
+}
+
+export function getWorkingSetCount(exercise, state, now = Date.now()) {
+  const planned = Math.max(1, Math.min(12, Number(exercise?.sets) || 1));
+  const block = getReturnBlock(state, now);
+  if (!block.active) return planned;
+  if (block.phase === 'weeks12') return Math.max(1, Math.min(planned, 2));
+  if (block.phase === 'week3' && getExerciseRole(exercise) === 'compound') {
+    return Math.max(1, Math.min(planned, 3));
+  }
+  return planned;
+}
+
 /**
  * Busca el último registro histórico completado de un ejercicio por nombre exacto.
  */
@@ -103,16 +183,50 @@ function roundStep(val, step) {
   return Math.round(val / s) * s;
 }
 
+function bandLevelOf(sets) {
+  const levels = (sets || []).map((s) => Number(s.mods?.bandLevel) || 0).filter((n) => n > 0);
+  return levels.length ? Math.max(...levels) : 1;
+}
+
+function beltDumbbellOf(sets) {
+  const loads = (sets || []).filter((s) => s.mods?.belt).map((s) => Number(s.weight) || 0);
+  return loads.length ? Math.max(...loads) : 0;
+}
+
+function holdDuringReturn(exercise, block, maxRawWeight, hadFailure, step, maxDb, avgReps, avgRir) {
+  let weight = exercise.equipment === 'band' ? 0 : maxRawWeight;
+  if (hadFailure && exercise.equipment === 'dumbbell' && weight > step) {
+    weight = Math.max(step, roundStep(weight * 0.9, step));
+  }
+  if (exercise.equipment === 'dumbbell') weight = Math.min(maxDb, weight);
+  let reps = Math.min(exercise.maxReps, Math.max(exercise.minReps, avgReps || exercise.minReps));
+  if (block.phase === 'week3' && avgRir >= 3 && reps < exercise.maxReps) reps += 1;
+  const prefix = exercise.equipment === 'band' || !(weight > 0) ? '' : `${weight} kg × `;
+  return {
+    summary: `${prefix}${reps} reps @ RIR ${block.targetRir}`,
+    detail: block.phase === 'week3'
+      ? 'Semana 3 de vuelta: puedes sumar una repetición limpia, pero no subas los kilos.'
+      : 'Semanas 1-2 de vuelta: misma carga, RIR 3-4. Hoy no se suben kilos.',
+    suggestedWeight: exercise.equipment === 'dumbbell' ? weight : (exercise.equipment === 'band' ? 0 : weight),
+    suggestedReps: reps,
+    suggestedRir: block.suggestedRir,
+    badge: `Vuelta S${block.week}`,
+    tone: 'amber'
+  };
+}
+
 /**
- * Algoritmo de doble progresión y readaptación adaptado al equipo del usuario.
+ * Algoritmo de doble progresión, vuelta al entrenamiento y readaptación.
  */
-export function calculateRecommendation(exercise, state) {
+export function calculateRecommendation(exercise, state, now = Date.now()) {
   const last = getLastExerciseLog(exercise.name, state);
-  const isReadapt = Boolean(state.settings?.readaptationMode);
-  const eq = state.equipment || { maxDumbbellKg: 24, dumbbellStepKg: 2, hasVest: true, vestKg: 10 };
+  const block = getReturnBlock(state, now);
+  const isReadapt = Boolean(state.settings?.readaptationMode) && !block.active;
+  const eq = state.equipment || { maxDumbbellKg: 24, dumbbellStepKg: 2, hasVest: false, vestKg: 10, bandCount: 0 };
   const maxDb = Number(eq.maxDumbbellKg) || 24;
   const vestKg = getVestWeightKg(state);
-  const step = Math.max(0.5, Number(exercise.stepKg) || Number(eq.dumbbellStepKg) || 2);
+  const step = Math.max(0.5, Number(exercise.stepKg) || Number(eq.dumbbellStepKg) || 1);
+  const bandCount = Math.max(0, Number(eq.bandCount) || (eq.hasBands ? 1 : 0));
   const targetRirLabel = isReadapt ? '2-3' : '1-2';
   const repRangeText = exercise.minReps === exercise.maxReps
     ? `${exercise.minReps}`
@@ -121,6 +235,18 @@ export function calculateRecommendation(exercise, state) {
   // Primera vez que se registra el ejercicio
   if (!last || last.sets.length === 0) {
     const defaultWeight = exercise.equipment === 'dumbbell' ? '' : 0;
+    if (block.active) {
+      return {
+        summary: `Carga cómoda × ${repRangeText} reps @ RIR ${block.targetRir}`,
+        detail: 'Bloque de vuelta: elige un peso fácil, deja 3-4 repeticiones en recámara y no busques subir kilos.',
+        suggestedWeight: defaultWeight,
+        suggestedReps: exercise.minReps,
+        suggestedRir: block.suggestedRir,
+        suggestedBandLevel: exercise.equipment === 'band' ? 1 : undefined,
+        badge: `Vuelta S${block.week}`,
+        tone: 'amber'
+      };
+    }
     if (isReadapt) {
       return {
         summary: `Carga cómoda × ${repRangeText} reps @ RIR 2-3`,
@@ -147,9 +273,11 @@ export function calculateRecommendation(exercise, state) {
   const rawWeights = sets.map((s) => Number(s.weight) || 0);
   const maxRawWeight = Math.max(...rawWeights);
   const anyVest = sets.some((s) => Boolean(s.mods?.vest));
+  const anyBelt = sets.some((s) => Boolean(s.mods?.belt));
   const anyPause = sets.some((s) => Boolean(s.mods?.pause));
   const anyBand = sets.some((s) => Boolean(s.mods?.band));
-  const maxEffectiveAdded = Math.max(...sets.map((s) => (Number(s.weight) || 0) + (s.mods?.vest ? vestKg : 0)));
+  const bandLevel = bandLevelOf(sets);
+  const beltLoad = beltDumbbellOf(sets);
 
   const repsArr = sets.map((s) => Number(s.reps) || 0);
   const avgReps = Math.round(repsArr.reduce((a, b) => a + b, 0) / sets.length);
@@ -163,6 +291,10 @@ export function calculateRecommendation(exercise, state) {
   const avgRir = parsedRirs.reduce((a, b) => a + b, 0) / parsedRirs.length;
   const hadFailure = parsedRirs.some((r) => r === 0);
   const allReachedTop = repsArr.every((r) => r >= exercise.maxReps);
+
+  if (block.active) {
+    return holdDuringReturn(exercise, block, maxRawWeight, hadFailure, step, maxDb, avgReps, avgRir);
+  }
 
   // ---- MODO READAPTACIÓN ----
   if (isReadapt) {
@@ -212,17 +344,31 @@ export function calculateRecommendation(exercise, state) {
 
   // Caso 2: Alcanzó el tope de repeticiones con buen RIR (>= 1)
   if (allReachedTop && avgRir >= 1) {
-    // 2A. Bandas de resistencia (nunca sugerir "+1 kg"!)
+    // 2A. Bandas: pasar a la siguiente banda del juego, nunca "+1 kg"
     if (exercise.equipment === 'band') {
+      if (bandCount > 1 && bandLevel < bandCount) {
+        const nextLevel = bandLevel + 1;
+        return {
+          summary: `Banda ${nextLevel} de ${bandCount} × ${exercise.minReps} reps @ RIR 1-2`,
+          detail: `Completaste la banda ${bandLevel}. Pasa a la banda ${nextLevel} de ${bandCount} y reinicia en ${exercise.minReps} reps.`,
+          suggestedWeight: 0,
+          suggestedReps: exercise.minReps,
+          suggestedRir: 2,
+          suggestedBandLevel: nextLevel,
+          badge: `Banda ${nextLevel}/${bandCount}`,
+          tone: 'emerald'
+        };
+      }
       const tip = !anyPause
-        ? 'Sube a una banda más tensa, aléjate 1 paso del anclaje o agrega Pausa 2s en contracción.'
-        : 'Pasa a una banda de mayor resistencia o acorta el agarre para aumentar tensión.';
+        ? 'Ya usas la banda más fuerte de tu juego. Aléjate del anclaje o agrega una pausa de 2s.'
+        : 'Mantén la banda más fuerte y alarga la bajada a 3 segundos.';
       return {
-        summary: `Más tensión × ${exercise.minReps} reps @ RIR 1-2`,
-        detail: `Dominaste ${exercise.maxReps} reps con banda. ${tip}`,
+        summary: `Banda ${Math.min(bandLevel, bandCount || bandLevel)} × ${exercise.minReps} reps @ RIR 1-2`,
+        detail: `Dominaste ${exercise.maxReps} reps. ${tip}`,
         suggestedWeight: 0,
         suggestedReps: exercise.minReps,
         suggestedRir: 2,
+        suggestedBandLevel: bandLevel,
         badge: 'Subir Tensión ↑',
         tone: 'emerald'
       };
@@ -248,19 +394,52 @@ export function calculateRecommendation(exercise, state) {
       };
     }
 
-    // 2C. Peso corporal (dominadas, flexiones, puente)
+    // 2C. Peso corporal: chaleco fijo, o mancuerna colgada del cinturón. La cadena no pesa.
     if (exercise.equipment === 'bodyweight') {
-      const nextAdded = roundStep(maxEffectiveAdded + step, step);
-      let extraNote = `Aumenta el lastre a +${nextAdded} kg (o añade pausa 2s / tempo lento).`;
-      if (maxEffectiveAdded === 0 && eq.hasVest) {
-        extraNote = `Activa el Chaleco +${vestKg}kg o agrega lastre progresivo.`;
-      } else if (anyVest) {
-        extraNote = `Ya entrenaste con Chaleco (+${vestKg}kg). Suma +${step} kg de lastre o Pausa 2s.`;
+      if (!anyVest && eq.hasVest && maxRawWeight === 0 && !anyBelt) {
+        return {
+          summary: `Chaleco +${vestKg} kg × ${exercise.minReps} reps @ RIR 1-2`,
+          detail: `Dominaste ${exercise.maxReps} reps. Activa el chaleco de ${vestKg} kg. Si no lo usas, cuelga una mancuerna del cinturón: la cadena no suma kilos.`,
+          suggestedWeight: 0,
+          suggestedReps: exercise.minReps,
+          suggestedRir: 2,
+          suggestedVest: true,
+          badge: 'Chaleco ↑',
+          tone: 'emerald'
+        };
       }
+      if (eq.hasWeightBelt) {
+        const current = anyBelt ? beltLoad : 0;
+        const nextDb = Math.min(maxDb, roundStep(current + step, step));
+        if (!anyBelt || nextDb > current) {
+          return {
+            summary: `Cinturón + ${nextDb} kg × ${exercise.minReps} reps @ RIR 1-2`,
+            detail: `La carga es la mancuerna colgada (${nextDb} kg, tope ${maxDb} kg). La cadena solo sujeta: no cuenta como peso.`,
+            suggestedWeight: nextDb,
+            suggestedReps: exercise.minReps,
+            suggestedRir: 2,
+            suggestedBelt: true,
+            suggestedVest: anyVest,
+            badge: 'Cinturón ↑',
+            tone: 'emerald'
+          };
+        }
+        return {
+          summary: `Cinturón + ${maxDb} kg × ${repRangeText} + pausa`,
+          detail: `La mancuerna del cinturón ya está en el tope de ${maxDb} kg. Agrega pausa o tempo; no inventes kilos de cadena.`,
+          suggestedWeight: maxDb,
+          suggestedReps: exercise.minReps,
+          suggestedRir: 1,
+          suggestedBelt: true,
+          badge: `Tope ${maxDb}kg ⚡`,
+          tone: 'emerald'
+        };
+      }
+      const nextAdded = Math.min(maxDb, roundStep(maxRawWeight + step, step));
       return {
         summary: `+${nextAdded} kg × ${exercise.minReps} reps @ RIR 1-2`,
-        detail: `Dominaste ${exercise.maxReps} reps. ${extraNote}`,
-        suggestedWeight: anyVest ? Math.max(0, roundStep(maxRawWeight + step, step)) : nextAdded,
+        detail: `Dominaste ${exercise.maxReps} reps. Suma lastre real (mancuerna o chaleco), nunca el peso de una cadena.`,
+        suggestedWeight: nextAdded,
         suggestedReps: exercise.minReps,
         suggestedRir: 2,
         badge: 'Subir Lastre ↑',
@@ -309,6 +488,7 @@ export function computeSetVolumeKg(setObj, exercise, state) {
 
   const w = Number(setObj.weight) || 0;
   const vestBonus = setObj.mods?.vest ? getVestWeightKg(state) : 0;
+  // mods.belt: `weight` ya es la mancuerna colgada. mods.chain no añade kilos.
 
   if (exercise.equipment === 'bodyweight') {
     const bw = getCurrentBodyWeight(state) || 0;
